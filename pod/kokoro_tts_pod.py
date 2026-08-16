@@ -19,10 +19,12 @@ from multiprocessing import Pool
 
 VOICE = 'af_bella'
 SPEED = 1.0
-# bahut zyada workers per-process overhead (model load) se faida ulta kam kar
-# dete hain — 32 par cap kiya hai, 36 chunk jaisi ek video mein ek hi round
-# mein taqreeban sab kuch parallel ho jata hai
-MAX_WORKERS = 32
+# 32 se 256 kiya (2026-08-17, user faisla) — pehle chhota video (36 chunks)
+# test karte waqt 32 hi kaafi tha (36 chunks ek hi round mein), lekin poora
+# ~65min video 100+ chunks bana sakta hai aur pod ke paas 384 tak cores hain —
+# 256 cap rakhne se os.cpu_count() hi asli limit banta hai (neeche min() mein),
+# taake bade video par bhi zyada se zyada cores istemal hon
+MAX_WORKERS = 256
 
 _pipeline = None  # har worker process mein EK dafa load hota hai (initializer)
 
@@ -89,6 +91,17 @@ def main():
     blocks = chunk_text(text)
     n_workers = min(MAX_WORKERS, max(1, os.cpu_count() or 1), len(blocks))
     print(f"{len(text.split())} words -> {len(blocks)} chunks (Kokoro, voice={VOICE}, {n_workers} parallel workers)", flush=True)
+
+    # ASLI BUG: pehle seedha Pool bana kar N workers ek sath _init_worker chalate
+    # thay — sab EK SATH Hugging Face Hub se (unauthenticated) model weights
+    # download/verify karne ki koshish karte, aur HF rate-limit se sab phans
+    # jate (7 min mein 0 chunks). Ab pehle MAIN process mein EK dafa load karo
+    # (download + local cache), TAB Pool banao — workers ka apna load phir
+    # sirf local disk se hota hai, koi network race nahi.
+    print("Kokoro model pehle se load kar raha hun (cache warm, taake workers ek sath download na karein)...", flush=True)
+    from kokoro import KPipeline
+    KPipeline(lang_code='a')
+    print("cache warm ho gaya, ab parallel workers shuru", flush=True)
 
     paths = [chunks_dir / f"chunk_{i:03d}.wav" for i in range(len(blocks))]
     tasks = [(i, blocks[i], paths[i], VOICE, SPEED) for i in range(len(blocks))]
