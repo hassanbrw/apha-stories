@@ -131,10 +131,11 @@ function buildSlot(s, i, dirs, cfg, tmp, avatarPool) {
           '-frames:v', String(n), ...enc, out]);
       return withAudio(out);
     }
-    // 3x try kiya tha (jitter aur kam), lekin asli bottleneck yehi step nikla
-    // (poori render ka ~2h18m — zoompan is resolution par CPU-heavy hai) —
-    // is liye 2x par wapas, speed ko priority di (user faisla).
-    const SS = 2, CW = W * SS, CH = H * SS;
+    // 3x = kam jitter, zyada CPU-heavy (isi liye pehle 2x par wapas gaye the
+    // jab render local machine par 2h18m le raha tha) — ab render pod ke
+    // multi-core box par hoti hai, extra compute afford ho jata hai, is liye
+    // 3x par wapas (2026-08-17, user faisla — smoothness ko priority).
+    const SS = 3, CW = W * SS, CH = H * SS;
     const mode = num % 4;                             // 0 zoomIn 1 zoomOut 2 panL 3 panR
     // thora bara scale taake pan ki gunjaish rahe
     const base = 1 + z;

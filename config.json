@@ -25,10 +25,6 @@
       "or:deepseek/deepseek-v3.2",
       "or:deepseek/deepseek-v4-pro"
     ],
-    "facts": [
-      "or:deepseek/deepseek-v4-pro:online",
-      "or:openai/gpt-4o-mini:online"
-    ],
     "video": [
       "gemini-2.5-flash"
     ],
@@ -41,29 +37,23 @@
     "_note": "Ye teen cheezein DeepSeek nahi likhta \u2014 Claude likhta hai (behtar hook aur insani lehja). Dekho docs/GUIDE.md.",
     "hook": true,
     "humanPass": true,
-    "humanPassMaxWords": 500,
-    "stockKeywords": true
+    "humanPassMaxWords": 500
   },
   "voice": {
-    "_note": "Kokoro (local, free — koi API cost nahi, koi cloud key nahi). id = Kokoro voice preset naam. af_bella = warm American female, pichli ElevenLabs 'Bella' pasand se sab se qareeb. whisperModel: word-timing ke liye faster-whisper size (tiny/base/small/medium) — 'small' CPU par theek balance hai.",
+    "_note": "PRODUCTION VOICE (2026-08-17 se): Chatterbox, GPU pod par (pod/pod-start-voice.js) — 'Antoni' warm-male reference se clone hota hai (.env -> VOICE_REF_AUDIO, R2 par refs/antoni-warm-male-long.mp3, 111.7s — 8.4s wale se upgrade). Neeche wale id/speed sirf LOCAL KOKORO FALLBACK ke liye hain (stage 2, agar pod use na karna ho) — Kokoro khud koi reference-cloning nahi karta, sirf fixed presets deta hai.",
     "id": "af_bella",
     "speed": "1.0",
     "whisperModel": "small"
   },
   "shot": {
-    "_note": "Kitni der ek cheez screen par rahe. User ki hidayat: 150-200 images per story (723 bahut zyada thin) — is liye har image ~20s tak rehti hai, na ke 3.5s. Hook ke apne qaide hain (neeche).",
-    "imageSeconds": 21,
-    "imageMin": 18,
-    "imageMax": 24,
-    "stockSeconds": 5,
-    "stockMin": 4,
-    "stockMax": 6,
-    "maxAvatarRun": 1
+    "_note": "Kitni der ek cheez screen par rahe. User ki hidayat (2026-08-17): 200-250 images per story — is liye har image ~17s tak rehti hai. Hook ke apne qaide hain (neeche). (koi avatar/stock is niche mein nahi, wo fields hata di gayin.)",
+    "imageSeconds": 17,
+    "imageMin": 15,
+    "imageMax": 19
   },
   "hook": {
-    "_note": "Video ke pehle 30 second. avatarOpenSeconds = shuru mein kitni der avatar bole, phir tez cuts.",
+    "_note": "Video ke pehle 30 second — tez cuts.",
     "seconds": 30,
-    "avatarOpenSeconds": 5,
     "cutSeconds": 2.5
   },
   "sideBySide": {
@@ -76,23 +66,6 @@
     "_note": "characterConsistency=false — koi avatar/reference photo nahi is niche mein, is liye Gemini CC-toggle ka purana (photo-lock) tareeqa band hai. Consistency ab DESCRIPTION se aati hai — stage 4 khud ek chhota character sheet banata hai (naam + physical description) aur har prompt usay follow karta hai.",
     "characterConsistency": false,
     "characterShare": 0.3
-  },
-  "avatarLayout": {
-    "_note": "fullScreenShare 1 = har avatar shot poori screen. 0.5 = aadhe shots right-side (70% image / 30% avatar) \u2014 us ke liye wide avatar bhi chahiye.",
-    "fullScreenShare": 1,
-    "sidePosition": "right",
-    "sideSplit": {
-      "image": 70,
-      "avatar": 30
-    }
-  },
-  "stock": {
-    "_note": "Har clip alag YouTube video se (copyright). 1080p se kam kabhi nahi. Gemini trimmed clip ko dekh kar reject bhi karti hai.",
-    "minHeight": 1080,
-    "maxClipSeconds": 6,
-    "candidatesPerSlot": 5,
-    "uniqueVideosOnly": true,
-    "verifyWithGemini": true
   },
   "captions": {
     "_note": "Word-highlight karaoke-style captions (competitor style) — jo lafz bol raha hai wahi highlightColor mein, baaki safed.",
@@ -117,14 +90,11 @@
     "crf": 21,
     "preset": "veryfast",
     "zoom": 0.12,
-    "_note": "Har tasveer par smooth motion \u2014 bari bari zoom-in, zoom-out, pan-left, pan-right. zoom = kitni shiddat (0.12 = halka). Ye 2x supersample + lanczos se banti hai is liye SHAKE/jitter bilkul nahi."
+    "_note": "Har tasveer par smooth motion \u2014 bari bari zoom-in, zoom-out, pan-left, pan-right. zoom = kitni shiddat (0.12 = halka). Ye 3x supersample + lanczos se banti hai (2026-08-17: 2x se 3x kiya, zyada smooth \u2014 pod ke cores is extra compute ko afford kar sakte hain) is liye SHAKE/jitter bilkul nahi."
   },
   "concurrency": {
-    "_note": "Ek sath kitne kaam. Purana/dheema laptop ho to kam kar do. render=6 test se aaya (12-core machine par 1-at-a-time se ~3.5x tez tha).",
+    "_note": "Ek sath kitne kaam. Purana/dheema laptop ho to kam kar do. render pod par RENDER_CONC env var se khud scale hoti hai (pod/entrypoint.sh) \u2014 ye value sirf local machine ke liye hai.",
     "images": 1,
-    "stock": 3,
     "render": 6
-  },
-  "avatarAudio": "ai33",
-  "_avatarAudio_note": "Avatar ke hisson ki awaaz: 'ai33' (poore video jaisi, RECOMMENDED) ya 'heygen' (HeyGen ki apni, pitch alag). Hamesha ai33 rakho."
+  }
 }

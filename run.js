@@ -15,20 +15,23 @@ const fs = require('fs');
 const path = require('path');
 const U = require('./lib/util.js');
 
+// werewolf-alpha-romance: fiction, images-only niche (PATTERN=['image'] in
+// stages/3-timeline.js, config.ratio = {avatar:0, images:100, stock:0}).
+// facts/keywords/avatar/stock stages removed 2026-08-17 — facts had a
+// hardcoded "Amish farming documentary" prompt that corrupted a real script
+// (fact-checking real-world claims against fiction doesn't make sense as an
+// operation anyway), and keywords/avatar/stock are structurally guaranteed
+// to have zero slots to process in this niche, so they were dead weight.
 const STAGES = [
   { n: 1, key: 'script',    file: '1-script.js',    what: 'script (deepseek)' },
-  { n: 1.5, key: 'facts',   file: '1b-facts.js',    what: 'fact check (web search)' },
   // thumbnail ab images (6) se PEHLE banta hai — script.txt ke ilawa kuch
   // nahi chahiye, aur is se banayi gayi thumbnail baaki sab images ke liye
   // style-reference ban jati hai (stage 6 use karta hai, character consistency).
   { n: 1.7, key: 'thumbnail', file: '10-thumbnail.js', what: 'thumbnail (pehle — baaki images ke liye reference banega)' },
-  { n: 2, key: 'voice',     file: '2-voice.js',     what: 'voiceover + SRT (ai33.pro)' },
-  { n: 3, key: 'timeline',  file: '3-timeline.js',  what: 'timeline — SRT se avatar/image/stock' },
+  { n: 2, key: 'voice',     file: '2-voice.js',     what: 'voiceover + SRT (Kokoro local — production voice ab Chatterbox/pod se banti hai, ye local fallback hai)' },
+  { n: 3, key: 'timeline',  file: '3-timeline.js',  what: 'timeline — SRT se image slots' },
   { n: 4, key: 'prompts',   file: '4-prompts.js',   what: 'image prompts + character split' },
-  { n: 5, key: 'keywords',  file: '5-keywords.js',  what: 'stock keywords (timeline se)' },
-  { n: 6, key: 'images',    file: '6-images.js',    what: 'images — character + normal (Gemini)' },
-  { n: 7, key: 'avatar',    file: '7-avatar.js',    what: 'avatar (HeyGen — ek render, phir kaat)' },
-  { n: 8, key: 'stock',     file: '8-stock.js',     what: 'stock (YouTube, har clip alag video)' },
+  { n: 6, key: 'images',    file: '6-images.js',    what: 'images (Gemini)' },
   { n: 9, key: 'render',      file: '9-render.js',    what: 'render — pura ffmpeg (final.mp4)' },
 ];
 

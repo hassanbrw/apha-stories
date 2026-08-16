@@ -67,10 +67,12 @@ module.exports = async function (spec, cfg, st) {
 Neeche kahani ka shuru hai. Sirf 10-16 lafz mein batao ke thumbnail mein
 KAUN sa kirdaar/scene dikhna chahiye — is kahani ke sab se dramatic lamhe se
 (heroine, Alpha King, ya dono ek sath). Ek theek theek tasveer do
-(jaise "a cold Alpha King with ice-pale eyes looming over a kneeling maid in
-a torch-lit stone hall"). Koi text nahi, koi tashreeh nahi — bas scene.
+(jaise "a handsome, cold Alpha King with ice-pale eyes looming over a
+beautiful, kneeling maid in a torch-lit stone hall"). **Alpha King/hero ke
+liye lafz "handsome" aur heroine ke liye lafz "beautiful" zaroor shamil
+karo.** Koi text nahi, koi tashreeh nahi — bas scene.
 
-${script.slice(0, 1200)}`, { maxTokens: 140, temperature: 0.75 }).catch(() => 'a cold Alpha King looming over a low-status heroine in a torch-lit palace hall');
+${script.slice(0, 1200)}`, { maxTokens: 140, temperature: 0.75 }).catch(() => 'a handsome, cold Alpha King looming over a beautiful, low-status heroine in a torch-lit palace hall');
 
   const styles = [
     // 1 — single dramatic close-up, warm palace lighting (Lily/Alba ka andaz)

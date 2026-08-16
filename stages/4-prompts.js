@@ -53,7 +53,11 @@ module.exports = async function (spec, cfg, st) {
 - "name"
 - "age" (ek number ya "mid-20s" jaisi approximation)
 - "appearance": 1-2 jumlon ki THOS physical description (baal ka rang,
-  aankhen, qad-o-qamat, libas ka andaz) — ye POORI kahani mein WAHI rahegi
+  aankhen, qad-o-qamat, libas ka andaz) — ye POORI kahani mein WAHI rahegi.
+  **MARD/male lead (Alpha King/hero) ki appearance mein lafz "handsome"
+  zaroor shamil karo. AURAT/female lead (heroine) ki appearance mein lafz
+  "beautiful" zaroor shamil karo.** (ye har image prompt mein automatically
+  chala jayega, is liye character sheet mein hi likhna zaroori hai.)
 
 JSON array do: [{"name":"...", "age":"...", "appearance":"..."}]
 Sirf ENGLISH mein.
