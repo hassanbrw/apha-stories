@@ -32,9 +32,25 @@ function rclone(args) {
 }
 
 // local file/dir -> r2:bucket/videoId/relPath
+// ASLI GOTCHA: "rclone copy src dest" mein dest HAMESHA ek folder maana jata
+// hai, target FILENAME nahi — agar src ka basename relPath se ALAG ho (jaise
+// yahan hum ek file ko naya naam de kar upload karna chahte hain) to rclone
+// chup chaap ek NESTED object bana deta hai (r2:.../relPath/<asli-naam>),
+// "relPath" par seedha koi file nahi hoti. Isi wajah se pod par voice
+// reference "file not found" mila tha — download to sahi jagah se ho raha
+// tha, lekin andar wala naam alag nikla. Is liye: agar local file ka naam
+// relPath se match kare (ya relPath poori tarah ek folder ho), "copy" theek
+// hai; single-file RENAME ke liye hamesha uploadAs() (copyto) istemal karo.
 function upload(videoId, localPath, relPath) {
   const { bucket } = rcloneConf();
   rclone(['copy', localPath, `r2:${bucket}/${videoId}/${relPath}`]);
+}
+
+// local FILE -> r2:bucket/videoId/relPath, EXACT naam ke sath (rename karte
+// waqt istemal karo — "copyto" dest ko seedha target file maanta hai, folder nahi)
+function uploadAs(videoId, localPath, relPath) {
+  const { bucket } = rcloneConf();
+  rclone(['copyto', localPath, `r2:${bucket}/${videoId}/${relPath}`]);
 }
 
 // r2:bucket/videoId/relPath -> local file/dir
@@ -64,4 +80,4 @@ function remove(videoId, relPath) {
   try { rclone(['delete', `r2:${bucket}/${videoId}/${relPath}`]); } catch {}
 }
 
-module.exports = { rclone, upload, download, exists, remove, rcloneConf };
+module.exports = { rclone, upload, uploadAs, download, exists, remove, rcloneConf };

@@ -53,7 +53,7 @@ const arg = (name, def = null) => {
   U.log(`\n== IMAGES_READY marker bhej raha hun (pod ${instanceId} ab render shuru karega) ==`);
   const markerFile = path.join(os.tmpdir(), `IMAGES_READY-${id}`);
   fs.writeFileSync(markerFile, 'ready');
-  R2.upload(id, markerFile, 'IMAGES_READY');
+  R2.uploadAs(id, markerFile, 'IMAGES_READY');   // uploadAs, NAHI upload — naam badal rahe hain (see r2.js note)
   fs.rmSync(markerFile, { force: true });
   U.ok('marker bheja gaya');
 
