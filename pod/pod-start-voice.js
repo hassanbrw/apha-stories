@@ -35,6 +35,16 @@ const arg = (name, def = null) => {
   if (!imageName) { U.bad('.env mein POD_IMAGE_NAME nahi mila'); process.exit(1); }
   if (!fs.existsSync(U.p(id, 'script.txt'))) { U.bad('script.txt nahi mila — pehle local script stage chalao'); process.exit(1); }
 
+  // ASLI BUG (2026-08-17): pichli video ka voice/ R2 par pada reh gaya tha —
+  // is script ka poll sirf "voice/voiceover.mp3 maujood hai?" dekhta hai, aur
+  // wo PURANI (corrupted-script se bani) file dekh kar foran "mil gayi" keh
+  // deta tha, bina pod ke naya kuch banaye. Ab har naye run se pehle purana
+  // voice/ R2 se poora mita dete hain, taake stale data kabhi dobara galat
+  // "done" na lage.
+  U.log(`\n== R2 par purana voice/ + IMAGES_READY marker (agar koi ho) saaf kar raha hun ==`);
+  R2.remove(id, 'voice');
+  R2.remove(id, 'IMAGES_READY');
+
   U.log(`\n== R2 par upload: script.txt ==`);
   R2.upload(id, U.p(id, 'script.txt'), 'script.txt');
   U.ok('upload mukammal');

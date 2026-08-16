@@ -56,4 +56,12 @@ function exists(videoId, relPath) {
   }
 }
 
-module.exports = { rclone, upload, download, exists, rcloneConf };
+// r2:bucket/videoId/relPath (ek file ya poora "folder" prefix — S3 mein asli
+// folders nahi hotay, is liye "delete" hi dono ke liye kaam karta hai, "purge"
+// nahi) mita do — pehle se khaali/maujood na ho to bhi chup chaap theek hai
+function remove(videoId, relPath) {
+  const { bucket } = rcloneConf();
+  try { rclone(['delete', `r2:${bucket}/${videoId}/${relPath}`]); } catch {}
+}
+
+module.exports = { rclone, upload, download, exists, remove, rcloneConf };
