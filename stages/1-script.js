@@ -254,6 +254,25 @@ function trimToMax(parts, max, protectedIdx = new Set()) {
   return { parts: kept, total };
 }
 
+// Pichli videos mein istemal ho chuke cast naam dhoondo (state.json ka
+// meta.cast) — taake model wahi "Elara"/"Kaelen" jaise generic fantasy naam
+// har dafa dobara na chune (ye khud humaari apni script-comparison-report.md
+// mein competitor channels ki AI-generation "tell" batayi gayi thi — Lucy/
+// Bonnie/Cassian ka dohrav — aur hum khud isi mein phans gaye the).
+function usedCastNames(currentId) {
+  const names = new Set();
+  for (const f of U.listVideos()) {
+    try {
+      const sp = U.loadVideoSpec(f);
+      if (sp.id === currentId) continue;
+      const other = U.loadState(sp.id);
+      const c = other?.meta?.cast;
+      if (c) Object.values(c).forEach(n => n && names.add(n));
+    } catch {}
+  }
+  return [...names];
+}
+
 module.exports = async function (spec, cfg, st) {
   const id = spec.id;
   const dest = U.p(id, 'script.txt');
@@ -269,6 +288,9 @@ module.exports = async function (spec, cfg, st) {
   const beats = Math.max(3, Math.round(target / WORDS_PER_BEAT));
   U.log(`   topic: ${topic.slice(0, 66)}`);
   U.log(`   target: ${WC.min}-${WC.max} words (teaser ~${TEASER_WORDS} + story ~${target} + CTA ~${CTA_WORDS}) → ${beats} beats`);
+
+  const avoidNames = usedCastNames(id);
+  if (avoidNames.length) U.log(`   pichli videos ke naam (avoid honge): ${avoidNames.join(', ')}`);
 
   // ---------- PASS 1: outline + cast (STRICTLY is topic se, generic nahi) ----------
   const outlineResp = await AI.chatJson(model,
@@ -326,7 +348,9 @@ Qaide:
   mein likho (jaisa upar "keyEvents" list mein likha), warna khaali "" rakho
 
 CAST — is topic ke MUKHYA kirdaaron ke FIXED naam do (poori kahani mein YEHI
-naam istemal honge, kabhi nahi badlenge):
+naam istemal honge, kabhi nahi badlenge). ${avoidNames.length ? `YE NAAM PEHLE
+DOOSRI KAHANIYON MEIN ISTEMAL HO CHUKE HAIN — BILKUL MAT DOHRAO, har naam in
+se ALAG aur ASLI (original) hona chahiye: ${avoidNames.join(', ')}.` : ''}
 {"heroine":"naam","alphaKing":"naam","antagonist":"naam ya khaali agar is topic mein koi khaas villain na ho"}
 
 Jawab is shape mein do:
@@ -340,6 +364,7 @@ BAHUT AHEM: jawab sirf ENGLISH mein. Hindi/Urdu script (Devanagari) BILKUL nahi.
     .filter(b => b && (b.covers || b.title));
   if (list.length < 3) throw new Error(`outline mein sirf ${list.length} beats aaye`);
   const cast = outlineResp?.cast && outlineResp.cast.heroine && outlineResp.cast.alphaKing ? outlineResp.cast : null;
+  if (cast) st.meta.cast = cast;
   const keyEvents = Array.isArray(outlineResp?.keyEvents) ? outlineResp.keyEvents.filter(Boolean) : [];
 
   // ASLI BUG (video 3): model kabhi EK hi keyEvent DO beats ko de deta tha

@@ -43,4 +43,17 @@ function download(videoId, relPath, localPath) {
   rclone(['copy', `r2:${bucket}/${videoId}/${relPath}`, localPath]);
 }
 
-module.exports = { rclone, upload, download, rcloneConf };
+// r2:bucket/videoId/relPath maujood hai ya nahi (poll-for-marker jaisa istemal ke liye)
+function exists(videoId, relPath) {
+  const { confPath, bucket } = rcloneConf();
+  try {
+    const out = execFileSync('rclone', ['--config', confPath, '--s3-no-check-bucket', 'lsf', `r2:${bucket}/${videoId}/${relPath}`], { encoding: 'utf8' }).trim();
+    return out.length > 0;
+  } catch {
+    return false;
+  } finally {
+    fs.rmSync(confPath, { force: true });
+  }
+}
+
+module.exports = { rclone, upload, download, exists, rcloneConf };

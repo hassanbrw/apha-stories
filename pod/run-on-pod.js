@@ -2,17 +2,25 @@
 //  RUN ON POD — poora remote voice+render workflow, ek command se
 //
 //  istemal:
-//    node pod/run-on-pod.js --video="<id>"                          (Vast.ai, default)
+//    node pod/run-on-pod.js --video="<id>"                          (Vast.ai, default — voice+render dono)
+//    node pod/run-on-pod.js --video="<id>" --voice-only              (sirf Chatterbox voice, render skip)
 //    node pod/run-on-pod.js --video="<id>" --provider=runpod --gpu="NVIDIA A100 80GB PCIe"
 //    node pod/run-on-pod.js --video="<id>" --provider=vast --gpu="RTX 5090" --min-cores=90
 //
-//  1) local se R2 par: script.txt, timeline.json, images/, thumbnail/
+//  ZAROORI TARTEEB: render ko timeline.json + images/ chahiye, aur wo dono
+//  khud VOICE ke baad, LOCAL pipeline (stages 3-6) se bantay hain (timeline
+//  voice ki word-by-word timing se banti hai). Is liye ek fresh video ke
+//  liye --voice-only pehle chalao, phir local se timeline/images bana lo,
+//  phir doosri dafa (bina --voice-only) render ke liye pod rent karo.
+//
+//  1) local se R2 par: script.txt (+ agar voice-only nahi to timeline.json,
+//     images/, thumbnail/ bhi)
 //  2) GPU instance banao (Docker image se — pehle GitHub Actions se
 //     build+push honi chahiye, pod/README.md dekho)
-//  3) instance khud R2 se download karta hai, voice (Chatterbox) + render
-//     karta hai, phir R2 par upload kar deta hai (entrypoint.sh dekho)
-//  4) jab kaam khatam ho (container exit), R2 se final.mp4 + voice/ +
-//     captions/ wapas local par download karo
+//  3) instance khud R2 se download karta hai, voice (Chatterbox) [+ render
+//     agar voice-only nahi], phir R2 par upload kar deta hai (entrypoint.sh dekho)
+//  4) jab kaam khatam ho (container exit), R2 se voice/ [+ final.mp4/captions/
+//     agar voice-only nahi] wapas local par download karo
 //  5) instance HAMESHA DELETE karo (sirf stop nahi — disk billing chalti
 //     rehti hai, ye wahi $7 wala masla hai jo pehle mila tha)
 // ============================================================

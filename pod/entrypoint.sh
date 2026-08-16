@@ -7,6 +7,20 @@
 #    R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, R2_ENDPOINT
 #    VOICE_REF_AUDIO        — (optional) cloning ke liye reference .wav ka R2 path
 #    WHISPER_MODEL          — (optional) default "small"
+#    VOICE_ONLY             — (optional) "1" ho to sirf Chatterbox voice bana
+#                              kar wapas upload karo, render bilkul mat chalao
+#                              (render CPU-bound hai, GPU se koi faida nahi —
+#                              is liye jab sirf voice/Antoni chahiye ho to
+#                              render skip kar ke pod jaldi/sasta khatam hota hai)
+#    WAIT_FOR_IMAGES        — (optional) "1" ho to voice ke baad pod KHATAM
+#                              nahi hota — R2 par ek "IMAGES_READY" marker file
+#                              ka intezaar karta hai (images is beech mein LOCAL
+#                              machine par bantay hain, kyunki wo sirf Gemini
+#                              browser login se chalte hain, pod par nahi ho
+#                              saktay). Marker milte hi timeline/images download
+#                              kar ke render khud shuru kar deta hai — isi pod
+#                              rental mein, dobara rent karne ki zaroorat nahi.
+#                              Intezaar max 90 min, phir error (paisa na jaltay).
 # ============================================================
 set -euo pipefail
 
@@ -31,13 +45,16 @@ acl = private
 EOF
 RCLONE="rclone --config $RCLONE_CONF --s3-no-check-bucket"
 
-echo "== R2 se video spec + script.txt + images/ + timeline.json download ho raha hai =="
+echo "== R2 se script.txt download ho raha hai =="
 mkdir -p /app/videos
-$RCLONE copy "r2:${R2_BUCKET}/${VIDEO_ID}/spec/${VIDEO_SPEC_FILE}" "/app/videos/"
 $RCLONE copy "r2:${R2_BUCKET}/${VIDEO_ID}/script.txt" "$WORKDIR/"
-$RCLONE copy "r2:${R2_BUCKET}/${VIDEO_ID}/timeline.json" "$WORKDIR/"
-$RCLONE copy "r2:${R2_BUCKET}/${VIDEO_ID}/images/" "$WORKDIR/images/"
-$RCLONE copy "r2:${R2_BUCKET}/${VIDEO_ID}/thumbnail/" "$WORKDIR/thumbnail/" || true
+if [ "${VOICE_ONLY:-0}" != "1" ] && [ "${WAIT_FOR_IMAGES:-0}" != "1" ]; then
+  echo "== R2 se video spec + images/ + timeline.json bhi download ho raha hai =="
+  $RCLONE copy "r2:${R2_BUCKET}/${VIDEO_ID}/spec/${VIDEO_SPEC_FILE}" "/app/videos/"
+  $RCLONE copy "r2:${R2_BUCKET}/${VIDEO_ID}/timeline.json" "$WORKDIR/"
+  $RCLONE copy "r2:${R2_BUCKET}/${VIDEO_ID}/images/" "$WORKDIR/images/"
+  $RCLONE copy "r2:${R2_BUCKET}/${VIDEO_ID}/thumbnail/" "$WORKDIR/thumbnail/" || true
+fi
 
 REF_ARG=""
 if [ -n "${VOICE_REF_AUDIO:-}" ]; then
@@ -47,6 +64,35 @@ fi
 
 echo "== VOICE (Chatterbox, GPU) ${WHISPER_MODEL:-small} =="
 python3 /app/pod/chatterbox_tts.py "$WORKDIR" "${REF_ARG}" "${WHISPER_MODEL:-small}"
+
+if [ "${VOICE_ONLY:-0}" = "1" ]; then
+  echo "== VOICE_ONLY=1 — render skip, sirf voice/ R2 par upload ho raha hai =="
+  $RCLONE copy "$WORKDIR/voice/" "r2:${R2_BUCKET}/${VIDEO_ID}/voice/"
+  echo "== KHATAM — voice R2 par ready hai: ${VIDEO_ID}/voice/ =="
+  exit 0
+fi
+
+if [ "${WAIT_FOR_IMAGES:-0}" = "1" ]; then
+  echo "== voice R2 par upload ho raha hai (images ka wait shuru karne se pehle) =="
+  $RCLONE copy "$WORKDIR/voice/" "r2:${R2_BUCKET}/${VIDEO_ID}/voice/"
+  echo "== ab IMAGES_READY marker ka intezaar (local machine par images ban rahi hain) =="
+  WAITED=0
+  MAXWAIT=5400   # 90 min
+  until $RCLONE lsf "r2:${R2_BUCKET}/${VIDEO_ID}/IMAGES_READY" 2>/dev/null | grep -q IMAGES_READY; do
+    sleep 20
+    WAITED=$((WAITED + 20))
+    if [ "$WAITED" -ge "$MAXWAIT" ]; then
+      echo "ERROR: 90 min tak IMAGES_READY marker nahi mila — images shayad fail ho gayin. Ruk raha hun."
+      exit 1
+    fi
+    if [ $((WAITED % 100)) -eq 0 ]; then echo "   ...${WAITED}s se intezaar mein"; fi
+  done
+  echo "== IMAGES_READY mil gaya — spec + images/ + timeline.json download ho rahe hain =="
+  $RCLONE copy "r2:${R2_BUCKET}/${VIDEO_ID}/spec/${VIDEO_SPEC_FILE}" "/app/videos/"
+  $RCLONE copy "r2:${R2_BUCKET}/${VIDEO_ID}/timeline.json" "$WORKDIR/"
+  $RCLONE copy "r2:${R2_BUCKET}/${VIDEO_ID}/images/" "$WORKDIR/images/"
+  $RCLONE copy "r2:${R2_BUCKET}/${VIDEO_ID}/thumbnail/" "$WORKDIR/thumbnail/" || true
+fi
 
 echo "== RENDER (ffmpeg clips + overlay + mux) =="
 cd /app
