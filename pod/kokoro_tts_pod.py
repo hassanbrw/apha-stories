@@ -49,7 +49,15 @@ def _gen_chunk(args):
     return (idx, 'done')
 
 
-def chunk_text(text, min_w=150, max_w=300):
+# Local/sequential run (tools/kokoro_tts.py) keeps 150-300 (fewer, bigger
+# chunks — no downside there, nothing runs in parallel). Pod version shrinks
+# this (2026-08-17, user faisla: "CPU minimum 50% utilize ho") so there are
+# ENOUGH chunks to actually occupy a 200-400 core box at once -- 36 chunks on
+# 384 cores was only ~9% utilized regardless of worker cap, since chunk COUNT
+# was the real ceiling, not the cap. Smaller chunks = each has less cross-
+# sentence context, so a slightly higher (but still small) risk of a chunk
+# boundary sounding a touch less smooth than a full-paragraph chunk would.
+def chunk_text(text, min_w=25, max_w=50):
     paras = [p.strip() for p in re.split(r'\n\s*\n', text) if p.strip()]
     out, cur, n = [], [], 0
     for p in paras:
