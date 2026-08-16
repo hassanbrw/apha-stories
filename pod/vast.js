@@ -64,14 +64,19 @@ async function createInstance({ offerId, image, disk = 60, env = {} }) {
     image,
     disk,
     env: envToDockerFlags(env),
-    runtype: 'ssh', // image ka apna ENTRYPOINT (entrypoint.sh) khud chal jata hai
+    // ASLI BUG (pehla test run): runtype "ssh" Vast.ai APNA entrypoint laga
+    // deta hai (SSH setup ke liye) aur image ka apna ENTRYPOINT (entrypoint.sh)
+    // KABHI nahi chalta — instance bas SSH le kar khaali baitha rehta,
+    // paisa jalta rehta, kaam kabhi shuru na hota. "args" runtype image ka
+    // ENTRYPOINT bark rakhta hai, is liye entrypoint.sh khud-ba-khud chalta hai.
+    runtype: 'args',
   });
 }
 
 async function getInstance(id) { return req('GET', `/instances/${id}/`); }
 async function destroyInstance(id) { return req('DELETE', `/instances/${id}/`); }
 
-async function waitUntilExited(id, { intervalMs = 20000, timeoutMs = 3 * 60 * 60 * 1000 } = {}) {
+async function waitUntilExited(id, { intervalMs = 20000, timeoutMs = 90 * 60 * 1000 } = {}) {
   const t0 = Date.now();
   while (Date.now() - t0 < timeoutMs) {
     const res = await getInstance(id);

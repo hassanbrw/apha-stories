@@ -38,7 +38,7 @@ async function deletePod(id) { return req('DELETE', `/pods/${id}`); }
 
 // pod ka apna kaam (entrypoint.sh) khatam ho jaye to container "exited" ho
 // jata hai — status poll karte hain jab tak wo state na aa jaye.
-async function waitUntilExited(id, { intervalMs = 20000, timeoutMs = 3 * 60 * 60 * 1000 } = {}) {
+async function waitUntilExited(id, { intervalMs = 20000, timeoutMs = 90 * 60 * 1000 } = {}) {
   const t0 = Date.now();
   while (Date.now() - t0 < timeoutMs) {
     const pod = await getPod(id);

@@ -60,17 +60,6 @@ function chosen() {
   U.log('  VIDEO PIPELINE');
   line();
 
-  // ---- keys ka check pehle (aadha kaam kar ke rukne se behtar) ----
-  const need = { YUNWU_API_KEY: 'script/prompts/keywords/stock-trim/thumbnail', AI33_KEY: 'voiceover' };
-  const missing = Object.keys(need).filter(k => !e[k]);
-  if (missing.length) {
-    U.bad('ye keys .env mein nahi mili:');
-    missing.forEach(k => U.log(`      ${k}   (${need[k]} ke liye)`));
-    U.log('\n   .env.example ko .env bana kar apni keys daalo.');
-    process.exit(1);
-  }
-  U.ok('keys mil gayin');
-
   let videos = U.listVideos();
   const one = arg('video');
   if (one) videos = videos.filter(f => f.toLowerCase().includes(one.toLowerCase()));
@@ -82,6 +71,18 @@ function chosen() {
 
   const stages = chosen();
   U.log(`\n  videos: ${videos.length}   |   stages: ${stages.map(s => s.n).join(',')}`);
+
+  // ---- keys ka check — sirf un stages ke liye jo chuni gayi hain (render
+  // jaise stage ko koi external API key nahi chahiye, pod par isi liye zaroorat nahi) ----
+  const KEY_STAGES = { YUNWU_API_KEY: ['script', 'prompts', 'keywords', 'stock', 'thumbnail'] };
+  const missing = Object.keys(KEY_STAGES).filter(k => KEY_STAGES[k].some(sk => stages.some(s => s.key === sk)) && !e[k]);
+  if (missing.length) {
+    U.bad('ye keys .env mein nahi mili:');
+    missing.forEach(k => U.log(`      ${k}`));
+    U.log('\n   .env.example ko .env bana kar apni keys daalo.');
+    process.exit(1);
+  }
+  U.ok('keys mil gayin');
 
   if (flag('list')) {
     for (const f of videos) {

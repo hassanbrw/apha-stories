@@ -50,6 +50,13 @@ python3 /app/pod/chatterbox_tts.py "$WORKDIR" "${REF_ARG}" "${WHISPER_MODEL:-sma
 
 echo "== RENDER (ffmpeg clips + overlay + mux) =="
 cd /app
+# config.json ka concurrency.render local machine (12 cores) ke liye tuned hai
+# (=6) — pod par jitne bhi cores rent hue hain unka use karo, warna zyadatar
+# rented cores render ke waqt khaali baithe rahenge. 32 par cap kiya hai
+# (diminishing returns aur ffmpeg process-spawn overhead se bachne ke liye).
+PODCORES=$(nproc)
+export RENDER_CONC=$(( PODCORES < 32 ? PODCORES : 32 ))
+echo "   RENDER_CONC=${RENDER_CONC} (pod cores: ${PODCORES})"
 node run.js --video="${VIDEO_ID}" --only=render
 
 echo "== R2 par final.mp4 + voice/ + captions/ upload ho raha hai =="
