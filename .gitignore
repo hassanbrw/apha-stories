@@ -1,0 +1,15 @@
+node_modules/
+.env
+browser/
+work/
+logs/
+tools/gemini/output/
+tools/gemini/downloads/
+tools/gemini/prompts/*.txt
+tools/gemini/state-*.json
+tools/gemini/reference/
+avatars/
+*.log
+assets/
+**/__pycache__/
+*.pyc

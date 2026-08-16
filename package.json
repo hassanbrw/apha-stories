@@ -1,0 +1,13 @@
+{
+  "name": "faceless-studio",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Topic se poori faceless video — avatar, AI images, asli stock footage, sab narration ke sath sync.",
+  "scripts": {
+    "check": "node setup/check.js",
+    "login:gemini": "node setup/gemini-login.js",
+    "login:heygen": "node setup/heygen-setup.js",
+    "list": "node run.js --list"
+  },
+  "dependencies": { "playwright": "^1.49.0" }
+}

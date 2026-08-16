@@ -1,0 +1,12 @@
+{
+  "toolUrl": "https://gemini.google.com/share/26b1c2d69587",
+  "imagesPerProfile": 1000,
+  "batchSize": {
+    "normal": 50,
+    "character": 25
+  },
+  "browser": "chrome",
+  "useRealChrome": false,
+  "chromeUserDataDir": "",
+  "onlyProfiles": []
+}

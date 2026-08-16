@@ -1,0 +1,87 @@
+// ============================================================
+//  Vast.ai REST API — offer dhoondo, instance banao, status dekho, khatam karo
+//
+//  ASLI GOTCHA: docs.vast.ai ke examples (PUT /bundles/ with {q:{...}},
+//  PUT /asks/{id}/) test karne par 404/400 dete hain — docs stale hain.
+//  Live API test kar ke ye SAHI shape maloom hui (2026-08-17):
+//    search:  POST /api/v0/bundles          body = query object SEEDHA (no "q" wrapper)
+//    create:  PUT  /api/v0/asks/{offerId}/
+//    status:  GET  /api/v0/instances/{id}/   (v1 sirf LIST ke liye hai, single-id GET v0 par hai)
+//    destroy: DELETE /api/v0/instances/{id}/
+//
+//  ASLI GOTCHA #2 (RunPod par bhi yehi mila tha): "stop" sirf compute rok ta
+//  hai, DISK abhi bhi attached rehti hai aur billing chalti rehti hai.
+//  Is liye HAMESHA DELETE (destroy) karo, kabhi sirf "stop" nahi.
+// ============================================================
+const U = require('../lib/util.js');
+
+const BASE = 'https://console.vast.ai/api/v0';
+
+function key() {
+  const e = U.env();
+  if (!e.VAST_API_KEY) throw new Error('.env mein VAST_API_KEY nahi mila');
+  return e.VAST_API_KEY;
+}
+
+async function req(method, pathSuffix, body) {
+  const res = await fetch(`${BASE}${pathSuffix}`, {
+    method,
+    headers: { Authorization: `Bearer ${key()}`, 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const text = await res.text();
+  let json; try { json = text ? JSON.parse(text) : {}; } catch { json = { raw: text }; }
+  if (!res.ok || json.success === false) throw new Error(`Vast.ai API ${method} ${pathSuffix} — ${res.status}: ${text.slice(0, 300)}`);
+  return json;
+}
+
+// GPU naam + minimum reliability se best (sabse sasta) offer dhoondo.
+// Min CPU cores ka koi seedha filter field nahi (verify kiya, sirf gpu_name/
+// num_gpus/reliability2/rentable jaise ops maane) — is liye result mein se
+// khud filter karte hain.
+async function findOffer({ gpuName, minCpuCores = 40, minReliability = 0.95, maxGpuCount = 1 }) {
+  const res = await req('POST', '/bundles', {
+    gpu_name: { eq: gpuName },
+    num_gpus: { lte: maxGpuCount },
+    reliability2: { gte: minReliability },
+    rentable: { eq: true },
+    order: [['dph_total', 'asc']],
+    type: 'on-demand',
+    limit: 50,
+  });
+  const offers = (res.offers || []).filter(o => (o.cpu_cores_effective || o.cpu_cores || 0) >= minCpuCores);
+  if (!offers.length) throw new Error(`koi offer nahi mila (${gpuName}, ${minCpuCores}+ cores, ${minReliability * 100}%+ reliable)`);
+  return offers[0]; // sabse sasta jo shart poori kare
+}
+
+// env: plain object {KEY: "value"} — Vast.ai khud "-e KEY=value" format maangta hai
+function envToDockerFlags(env) {
+  return Object.entries(env).map(([k, v]) => `-e ${k}=${JSON.stringify(String(v))}`).join(' ');
+}
+
+async function createInstance({ offerId, image, disk = 60, env = {} }) {
+  return req('PUT', `/asks/${offerId}/`, {
+    image,
+    disk,
+    env: envToDockerFlags(env),
+    runtype: 'ssh', // image ka apna ENTRYPOINT (entrypoint.sh) khud chal jata hai
+  });
+}
+
+async function getInstance(id) { return req('GET', `/instances/${id}/`); }
+async function destroyInstance(id) { return req('DELETE', `/instances/${id}/`); }
+
+async function waitUntilExited(id, { intervalMs = 20000, timeoutMs = 3 * 60 * 60 * 1000 } = {}) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < timeoutMs) {
+    const res = await getInstance(id);
+    const status = res?.instances?.actual_status;
+    U.log(`   instance ${id}: ${status ?? '(booting)'}`);
+    if (status && /exited/i.test(status)) return res;
+    if (status && /unknown|error/i.test(status)) throw new Error(`instance ${id} status "${status}" — kuch ghalat hua, dashboard check karo`);
+    await new Promise(r => setTimeout(r, intervalMs));
+  }
+  throw new Error(`instance ${id} ${timeoutMs / 60000} min mein khatam nahi hua — khud check karo`);
+}
+
+module.exports = { findOffer, createInstance, getInstance, destroyInstance, waitUntilExited };

@@ -1,0 +1,130 @@
+{
+  "_readme": "Har cheez yahan se badalti hai. Kisi bhi cheez ko chhedne ke liye code khholne ki zaroorat nahi. Tafseel: docs/SETTINGS.md",
+  "canvas": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 30
+  },
+  "ratio": {
+    "_note": "Final video ka hissa. Rhythm PATTERN se aata hai (stages/3-timeline.js). Niche mein koi avatar/host nahi (competitor channels bhi sab AI-image slideshow) — sirf images.",
+    "avatar": 0,
+    "images": 100,
+    "stock": 0
+  },
+  "models": {
+    "_note": "Har jagah LIST hai \u2014 pehla na chale to agla khud chal jata hai. 'or:' ka matlab OpenRouter. v4-pro abhi bahut khaali jawab de raha tha (har dusri call retry) \u2014 is liye v3.2 pehle rakha, v4-pro fallback mein (agla khud aazma leta hai agar v3.2 kabhi na chale).",
+    "script": [
+      "or:deepseek/deepseek-v3.2",
+      "or:deepseek/deepseek-v4-pro"
+    ],
+    "prompts": [
+      "or:deepseek/deepseek-v3.2",
+      "or:deepseek/deepseek-v4-pro"
+    ],
+    "timeline": [
+      "or:deepseek/deepseek-v3.2",
+      "or:deepseek/deepseek-v4-pro"
+    ],
+    "facts": [
+      "or:deepseek/deepseek-v4-pro:online",
+      "or:openai/gpt-4o-mini:online"
+    ],
+    "video": [
+      "gemini-2.5-flash"
+    ],
+    "thumbnail": [
+      "gpt-image-2",
+      "gpt-image-1"
+    ]
+  },
+  "claudeWrites": {
+    "_note": "Ye teen cheezein DeepSeek nahi likhta \u2014 Claude likhta hai (behtar hook aur insani lehja). Dekho docs/GUIDE.md.",
+    "hook": true,
+    "humanPass": true,
+    "humanPassMaxWords": 500,
+    "stockKeywords": true
+  },
+  "voice": {
+    "_note": "Kokoro (local, free — koi API cost nahi, koi cloud key nahi). id = Kokoro voice preset naam. af_bella = warm American female, pichli ElevenLabs 'Bella' pasand se sab se qareeb. whisperModel: word-timing ke liye faster-whisper size (tiny/base/small/medium) — 'small' CPU par theek balance hai.",
+    "id": "af_bella",
+    "speed": "1.0",
+    "whisperModel": "small"
+  },
+  "shot": {
+    "_note": "Kitni der ek cheez screen par rahe. User ki hidayat: 150-200 images per story (723 bahut zyada thin) — is liye har image ~20s tak rehti hai, na ke 3.5s. Hook ke apne qaide hain (neeche).",
+    "imageSeconds": 21,
+    "imageMin": 18,
+    "imageMax": 24,
+    "stockSeconds": 5,
+    "stockMin": 4,
+    "stockMax": 6,
+    "maxAvatarRun": 1
+  },
+  "hook": {
+    "_note": "Video ke pehle 30 second. avatarOpenSeconds = shuru mein kitni der avatar bole, phir tez cuts.",
+    "seconds": 30,
+    "avatarOpenSeconds": 5,
+    "cutSeconds": 2.5
+  },
+  "sideBySide": {
+    "_note": "Beech ki editing mein 2 images ek sath. randomCount = kitni dafa (poori video mein bikhri hui). 0 = band.",
+    "randomCount": 6,
+    "everyNthImage": 0,
+    "gapPx": 8
+  },
+  "images": {
+    "_note": "characterConsistency=false — koi avatar/reference photo nahi is niche mein, is liye Gemini CC-toggle ka purana (photo-lock) tareeqa band hai. Consistency ab DESCRIPTION se aati hai — stage 4 khud ek chhota character sheet banata hai (naam + physical description) aur har prompt usay follow karta hai.",
+    "characterConsistency": false,
+    "characterShare": 0.3
+  },
+  "avatarLayout": {
+    "_note": "fullScreenShare 1 = har avatar shot poori screen. 0.5 = aadhe shots right-side (70% image / 30% avatar) \u2014 us ke liye wide avatar bhi chahiye.",
+    "fullScreenShare": 1,
+    "sidePosition": "right",
+    "sideSplit": {
+      "image": 70,
+      "avatar": 30
+    }
+  },
+  "stock": {
+    "_note": "Har clip alag YouTube video se (copyright). 1080p se kam kabhi nahi. Gemini trimmed clip ko dekh kar reject bhi karti hai.",
+    "minHeight": 1080,
+    "maxClipSeconds": 6,
+    "candidatesPerSlot": 5,
+    "uniqueVideosOnly": true,
+    "verifyWithGemini": true
+  },
+  "captions": {
+    "_note": "Word-highlight karaoke-style captions (competitor style) — jo lafz bol raha hai wahi highlightColor mein, baaki safed.",
+    "enabled": true,
+    "position": "left-bottom",
+    "style": "highlight",
+    "highlightColor": "#FFD700"
+  },
+  "wordCount": {
+    "_note": "Script ka sakht target — stages/1-script.js isi ke andar rehta hai (trim/extend dono).",
+    "min": 9000,
+    "max": 10000
+  },
+  "particles": {
+    "_note": "Halka floating dust/light-particle overlay (bilkul subtle) — user ki farmaish. Ek dafa cache hota hai (assets/particles_loop.mov), sab videos mein reuse.",
+    "enabled": true,
+    "loopSeconds": 20,
+    "count": 45,
+    "opacity": 60
+  },
+  "render": {
+    "crf": 21,
+    "preset": "veryfast",
+    "zoom": 0.12,
+    "_note": "Har tasveer par smooth motion \u2014 bari bari zoom-in, zoom-out, pan-left, pan-right. zoom = kitni shiddat (0.12 = halka). Ye 2x supersample + lanczos se banti hai is liye SHAKE/jitter bilkul nahi."
+  },
+  "concurrency": {
+    "_note": "Ek sath kitne kaam. Purana/dheema laptop ho to kam kar do. render=6 test se aaya (12-core machine par 1-at-a-time se ~3.5x tez tha).",
+    "images": 1,
+    "stock": 3,
+    "render": 6
+  },
+  "avatarAudio": "ai33",
+  "_avatarAudio_note": "Avatar ke hisson ki awaaz: 'ai33' (poore video jaisi, RECOMMENDED) ya 'heygen' (HeyGen ki apni, pitch alag). Hamesha ai33 rakho."
+}
