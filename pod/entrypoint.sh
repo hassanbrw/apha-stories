@@ -5,13 +5,14 @@
 #  Zaroori env vars (pod launch ke waqt RunPod secrets se aate hain):
 #    VIDEO_ID              — konsa video (work/<id>/ folder ka naam)
 #    R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, R2_ENDPOINT
-#    VOICE_REF_AUDIO        — (optional) cloning ke liye reference .wav ka R2 path
+#    VOICE_ID               — (optional) Kokoro voice preset, default "am_adam"
+#    VOICE_SPEED             — (optional) default "1.0"
 #    WHISPER_MODEL          — (optional) default "small"
-#    VOICE_ONLY             — (optional) "1" ho to sirf Chatterbox voice bana
-#                              kar wapas upload karo, render bilkul mat chalao
-#                              (render CPU-bound hai, GPU se koi faida nahi —
-#                              is liye jab sirf voice/Antoni chahiye ho to
-#                              render skip kar ke pod jaldi/sasta khatam hota hai)
+#    VOICE_ONLY             — (optional) "1" ho to sirf voice bana kar wapas
+#                              upload karo, render bilkul mat chalao (render
+#                              CPU-bound hai, GPU se koi faida nahi — is liye
+#                              jab sirf voice chahiye ho to render skip kar ke
+#                              pod jaldi/sasta khatam hota hai)
 #    WAIT_FOR_IMAGES        — (optional) "1" ho to voice ke baad pod KHATAM
 #                              nahi hota — R2 par ek "IMAGES_READY" marker file
 #                              ka intezaar karta hai (images is beech mein LOCAL
@@ -56,14 +57,8 @@ if [ "${VOICE_ONLY:-0}" != "1" ] && [ "${WAIT_FOR_IMAGES:-0}" != "1" ]; then
   $RCLONE copy "r2:${R2_BUCKET}/${VIDEO_ID}/thumbnail/" "$WORKDIR/thumbnail/" || true
 fi
 
-REF_ARG=""
-if [ -n "${VOICE_REF_AUDIO:-}" ]; then
-  $RCLONE copy "r2:${R2_BUCKET}/${VOICE_REF_AUDIO}" /tmp/voice_ref/
-  REF_ARG="/tmp/voice_ref/$(basename "$VOICE_REF_AUDIO")"
-fi
-
-echo "== VOICE (Chatterbox, GPU) ${WHISPER_MODEL:-small} =="
-python3 /app/pod/chatterbox_tts.py "$WORKDIR" "${REF_ARG}" "${WHISPER_MODEL:-small}"
+echo "== VOICE (Kokoro, parallel, voice=${VOICE_ID:-am_adam}) ${WHISPER_MODEL:-small} =="
+python3 /app/pod/kokoro_tts_pod.py "$WORKDIR" "${VOICE_ID:-am_adam}" "${VOICE_SPEED:-1.0}" "${WHISPER_MODEL:-small}"
 
 if [ "${VOICE_ONLY:-0}" = "1" ]; then
   echo "== VOICE_ONLY=1 — render skip, sirf voice/ R2 par upload ho raha hai =="

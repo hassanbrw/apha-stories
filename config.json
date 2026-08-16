@@ -40,8 +40,8 @@
     "humanPassMaxWords": 500
   },
   "voice": {
-    "_note": "PRODUCTION VOICE (2026-08-17 se): Chatterbox, GPU pod par (pod/pod-start-voice.js) — 'Antoni' warm-male reference se clone hota hai (.env -> VOICE_REF_AUDIO, R2 par refs/antoni-warm-male-long.mp3, 111.7s — 8.4s wale se upgrade). Neeche wale id/speed sirf LOCAL KOKORO FALLBACK ke liye hain (stage 2, agar pod use na karna ho) — Kokoro khud koi reference-cloning nahi karta, sirf fixed presets deta hai.",
-    "id": "af_bella",
+    "_note": "PRODUCTION VOICE (2026-08-17 se): Kokoro (local), preset am_adam (American male). Chatterbox+Antoni pod-based cloning ka pace/clarity test fail ho gaya (~420wpm, 3x too fast, aur cloning quality bhi kharab) — jab tak wo theek na ho, Kokoro hi istemal hoga.",
+    "id": "am_adam",
     "speed": "1.0",
     "whisperModel": "small"
   },

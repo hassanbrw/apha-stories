@@ -3,7 +3,7 @@
 //
 //  istemal:
 //    node pod/run-on-pod.js --video="<id>"                          (Vast.ai, default — voice+render dono)
-//    node pod/run-on-pod.js --video="<id>" --voice-only              (sirf Chatterbox voice, render skip)
+//    node pod/run-on-pod.js --video="<id>" --voice-only              (sirf voice, render skip)
 //    node pod/run-on-pod.js --video="<id>" --provider=runpod --gpu="NVIDIA A100 80GB PCIe"
 //    node pod/run-on-pod.js --video="<id>" --provider=vast --gpu="RTX 5090" --min-cores=90
 //
@@ -17,7 +17,7 @@
 //     images/, thumbnail/ bhi)
 //  2) GPU instance banao (Docker image se — pehle GitHub Actions se
 //     build+push honi chahiye, pod/README.md dekho)
-//  3) instance khud R2 se download karta hai, voice (Chatterbox) [+ render
+//  3) instance khud R2 se download karta hai, voice (Kokoro, parallel) [+ render
 //     agar voice-only nahi], phir R2 par upload kar deta hai (entrypoint.sh dekho)
 //  4) jab kaam khatam ho (container exit), R2 se voice/ [+ final.mp4/captions/
 //     agar voice-only nahi] wapas local par download karo
@@ -42,6 +42,7 @@ const arg = (name, def = null) => {
   const videos = U.listVideos().filter(f => f.toLowerCase().includes(videoArg.toLowerCase()));
   if (!videos.length) { U.bad(`videos/ mein "${videoArg}" se milta koi video nahi mila`); process.exit(1); }
   const spec = U.loadVideoSpec(videos[0]);
+  const cfg = U.config();
   const id = spec.id;
   const provider = arg('provider', 'vast'); // user ka faisla: Vast.ai sasta nikla RunPod se
   const imageName = U.env().POD_IMAGE_NAME;
@@ -70,7 +71,8 @@ const arg = (name, def = null) => {
     R2_ACCOUNT_ID: e.R2_ACCOUNT_ID, R2_ACCESS_KEY_ID: e.R2_ACCESS_KEY_ID,
     R2_SECRET_ACCESS_KEY: e.R2_SECRET_ACCESS_KEY, R2_BUCKET: e.R2_BUCKET, R2_ENDPOINT: e.R2_ENDPOINT,
     WHISPER_MODEL: e.WHISPER_MODEL || 'small',
-    ...(e.VOICE_REF_AUDIO ? { VOICE_REF_AUDIO: e.VOICE_REF_AUDIO } : {}),
+    VOICE_ID: cfg.voice?.id || 'am_adam',
+    VOICE_SPEED: String(cfg.voice?.speed || '1.0'),
   };
 
   let instanceId, waitFn, destroyFn;

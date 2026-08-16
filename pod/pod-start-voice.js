@@ -1,7 +1,8 @@
 // ============================================================
-//  POD START (VOICE) — pod rent karo, Chatterbox+Antoni voice banwao, phir
-//  pod ko ZINDA CHHOD DO (destroy NAHI karte) — wo IMAGES_READY marker ka
-//  intezaar khud entrypoint.sh mein karta hai (WAIT_FOR_IMAGES=1).
+//  POD START (VOICE) — pod rent karo, Kokoro voice banwao (parallel, saare
+//  pod cores istemal karte hue), phir pod ko ZINDA CHHOD DO (destroy NAHI
+//  karte) — wo IMAGES_READY marker ka intezaar khud entrypoint.sh mein
+//  karta hai (WAIT_FOR_IMAGES=1).
 //
 //  istemal:
 //    node pod/pod-start-voice.js --video="<id>"
@@ -30,6 +31,7 @@ const arg = (name, def = null) => {
   if (!videos.length) { U.bad(`videos/ mein "${videoArg}" se milta koi video nahi mila`); process.exit(1); }
   const spec = U.loadVideoSpec(videos[0]);
   const id = spec.id;
+  const cfg = U.config();
   const provider = arg('provider', 'vast');
   const imageName = U.env().POD_IMAGE_NAME;
   if (!imageName) { U.bad('.env mein POD_IMAGE_NAME nahi mila'); process.exit(1); }
@@ -57,7 +59,8 @@ const arg = (name, def = null) => {
     R2_SECRET_ACCESS_KEY: e.R2_SECRET_ACCESS_KEY, R2_BUCKET: e.R2_BUCKET, R2_ENDPOINT: e.R2_ENDPOINT,
     WHISPER_MODEL: e.WHISPER_MODEL || 'small',
     WAIT_FOR_IMAGES: '1',
-    ...(e.VOICE_REF_AUDIO ? { VOICE_REF_AUDIO: e.VOICE_REF_AUDIO } : {}),
+    VOICE_ID: cfg.voice?.id || 'am_adam',
+    VOICE_SPEED: String(cfg.voice?.speed || '1.0'),
   };
 
   let instanceId;
@@ -82,9 +85,9 @@ const arg = (name, def = null) => {
 
   const destroyFn = () => provider === 'vast' ? Vast.destroyInstance(instanceId) : RunPod.deletePod(instanceId);
 
-  U.log(`\n== voice (Chatterbox, Antoni) ka intezaar (poll ~20s) ==`);
+  U.log(`\n== voice (Kokoro, parallel) ka intezaar (poll ~20s) ==`);
   const t0 = Date.now();
-  const timeoutMs = 45 * 60 * 1000; // Chatterbox itself kabhi 45 min na le, safety cap
+  const timeoutMs = 45 * 60 * 1000; // parallel Kokoro itself kabhi 45 min na le, safety cap
   while (!R2.exists(id, 'voice/voiceover.mp3')) {
     if (Date.now() - t0 > timeoutMs) {
       U.bad('45 min mein voice nahi bani — kuch ghalat hua, instance delete kar raha hun (paisa na jaltay)');

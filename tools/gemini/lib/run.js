@@ -2,7 +2,24 @@
 //  RUN — prompts/ ki har txt file = ek video. 16:9 hamesha locked.
 //  mode "normal"    = character consistency OFF
 //  mode "character" = character consistency ON (reference/ se character image)
-//  Ek profile ki limit poori ho to khud agli profile par chala jata hai.
+//
+//  PARALLEL PROFILES (2026-08-17): pehle profiles ek ek kar ke (sequential)
+//  chalti thin — poori generation time is se lambi ho jati thi (500ish
+//  prompts, 50/batch, 1 profile = sab kuch ek browser se). Ab har video ke
+//  prompts profiles ki tadaad mein STATIC baraabar hisson mein baant diye
+//  jate hain (profile 1 = [0,half), profile 2 = [half,end) waghera), aur
+//  saari profiles apna apna hissa EK SATH (Promise.all) chalati hain.
+//
+//  Static (fixed) taqseem jaan-boojh kar hai, dynamic "jo khaali ho wo agla
+//  le le" nahi — kyunki dynamic taqseem mein shared state.progress counter
+//  par race condition ka khatra hota (do profiles ek sath "done" parhtin,
+//  dono apna kaam kar ke ALAG waqt par likhtin, ek doosre ka update mita
+//  deti). Static taqseem mein har profile SIRF apne hisse ka progress
+//  likhti hai (state.progress[v.key][profileName]) — kisi doosri profile ka
+//  data kabhi chhoo hi nahi sakti, is liye race condition mumkin hi nahi.
+//  Nuqsan: agar ek profile dheemi/fail ho to doosri us ka kaam nahi le sakti
+//  (perfect load-balance nahi) — lekin N profiles se roughly Nx speedup
+//  milta hai, aur ye tareeqa GALAT ban jane se zyada mehfooz hai.
 // ============================================================
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -18,7 +35,31 @@ const BATCH = Math.max(1, (S.batchSize && S.batchSize[MODE]) || (USE_CHAR ? 25 :
 const LIMIT = Math.max(1, S.imagesPerProfile || 1000);
 
 function line() { console.log('============================================================'); }
-const totalOf = (videos, state) => videos.reduce((s, v) => s + (state.progress[v.key] || 0), 0);
+
+// har video ke liye: total done = saari profiles ke apne apne hisson ka jama
+function totalDoneFor(v, state) {
+  const p = state.progress[v.key];
+  if (!p) return 0;
+  if (typeof p === 'number') return p;   // purana (pre-parallel) format — migration
+  return Object.values(p).reduce((a, n) => a + n, 0);
+}
+const totalOf = (videos, state) => videos.reduce((s, v) => s + totalDoneFor(v, state), 0);
+
+// har video ke prompts ko N profiles mein STATIC baraabar hisson mein baanto
+// (aakhri hissa bacha hua sab le leta hai, taake round-off se koi prompt na chhoote)
+function slicesFor(v, profileNames) {
+  const n = profileNames.length;
+  const total = v.prompts.length;
+  const per = Math.floor(total / n);
+  const slices = {};
+  let start = 0;
+  profileNames.forEach((name, i) => {
+    const end = i === n - 1 ? total : start + per;
+    slices[name] = { start, end };
+    start = end;
+  });
+  return slices;
+}
 
 (async () => {
   line();
@@ -32,11 +73,6 @@ const totalOf = (videos, state) => videos.reduce((s, v) => s + (state.progress[v
     process.exit(1);
   }
 
-  // DO TAREEQE:
-  //  A) copy mode (default): profiles/ ki copies use hoti hain, asli Chrome chalti reh sakti hai
-  //  B) direct mode (settings: "useRealChrome": true): TUMHARI ASLI Chrome profiles
-  //     seedha use hoti hain — copy ka koi jhagra nahi, login pakka. Lekin poore
-  //     kaam ke dauran Chrome BAND rehni chahiye.
   const DIRECT = S.useRealChrome === true;
   let profiles;
 
@@ -56,7 +92,6 @@ const totalOf = (videos, state) => videos.reduce((s, v) => s + (state.progress[v
       console.log('------------------------------------------------------------');
       process.exit(1);
     }
-    // settings mein "onlyProfiles" ho to sirf wahi (folder naam ya email se match)
     const only = Array.isArray(S.onlyProfiles) ? S.onlyProfiles.filter(Boolean) : [];
     let chosen = real;
     if (only.length) {
@@ -83,7 +118,6 @@ const totalOf = (videos, state) => videos.reduce((s, v) => s + (state.progress[v
       console.log('\n[X] koi profile tayyar nahi.  Pehle SETUP chalao.');
       process.exit(1);
     }
-    // chaabi/login check — copy adhoori ho to pehle hi bata do
     const broken = profiles.filter(p => {
       const d = path.join(C.PROFILE_DIR, p);
       return !C.profileHasLogin(d) || !C.profileHasKey(d);
@@ -101,8 +135,14 @@ const totalOf = (videos, state) => videos.reduce((s, v) => s + (state.progress[v
 
   const state = C.loadState(MODE);
   state.used = state.used || {}; state.progress = state.progress || {};
+  // purana format (state.progress[key] = number) mila to migrate karo: pehli
+  // profile ko wo saara kaam "kar chuki" maan lo, baaki profiles 0 se shuru
+  for (const v of videos) {
+    if (typeof state.progress[v.key] === 'number') {
+      state.progress[v.key] = { [profiles[0]]: state.progress[v.key] };
+    }
+  }
 
-  // har video ke references pehle hi dekh lo (taake masla shuru mein pata chale)
   const refsFor = {};
   let missingChar = [];
   for (const v of videos) {
@@ -120,7 +160,7 @@ const totalOf = (videos, state) => videos.reduce((s, v) => s + (state.progress[v
     ].filter(Boolean).join('   ');
     console.log(`    ${v.file.padEnd(24)} ${String(v.prompts.length).padStart(4)} prompts   ${tags}`);
   }
-  console.log(`\n  Profiles: ${profiles.length}  (har ek par ${LIMIT} images)`);
+  console.log(`\n  Profiles: ${profiles.length}  (har ek par ${LIMIT} images, PARALLEL chalengi)`);
   const done0 = totalOf(videos, state);
   if (done0) console.log(`  Resume: ${done0}/${totalPrompts} pehle ho chuki hain`);
 
@@ -136,12 +176,14 @@ const totalOf = (videos, state) => videos.reduce((s, v) => s + (state.progress[v
     process.exit(1);
   }
 
-  // ---------- profile by profile ----------
-  for (const profileName of profiles) {
-    if (totalOf(videos, state) >= totalPrompts) break;
+  // har video ke prompts profiles mein static baant do (ek dafa, shuru mein)
+  const sliceMap = {};   // v.key -> { profileName: {start, end} }
+  for (const v of videos) sliceMap[v.key] = slicesFor(v, profiles);
 
+  // ---------- ek profile ka poora kaam (apne slice tak mehdood) ----------
+  async function runProfile(profileName) {
     let budget = LIMIT - (state.used[profileName] || 0);
-    if (budget <= 0) { console.log(`\n  [skip] ${profileName} — limit poori ho chuki`); continue; }
+    if (budget <= 0) { console.log(`\n  [skip] ${profileName} — limit poori ho chuki`); return; }
 
     line();
     console.log(`  PROFILE: ${profileName}   (${state.used[profileName] || 0}/${LIMIT} use ho chuki)`);
@@ -158,34 +200,35 @@ const totalOf = (videos, state) => videos.reduce((s, v) => s + (state.progress[v
         channel: S.browser || 'chrome',
         acceptDownloads: true,
         viewport: null,
-        // ZAROORI: Playwright default mein --use-mock-keychain aur --password-store=basic
-        // deta hai. In se Chrome asli keychain use nahi karta, purane sign-in tokens
-        // decrypt nahi hote aur account SIGN OUT ho jata hai. Isliye ye hata rahe hain.
         ignoreDefaultArgs: ['--enable-automation', '--use-mock-keychain', '--password-store=basic'],
         args: ['--start-maximized', '--no-first-run', '--no-default-browser-check', '--disable-blink-features=AutomationControlled', ...extraArgs],
       });
     } catch (e) {
-      console.log(`  [!] browser khul nahi saka: ${e.message}`);
+      console.log(`  [!] ${profileName}: browser khul nahi saka: ${e.message}`);
       console.log('      (agar "already in use" likha hai to Chrome band karo aur dobara chalao)');
-      continue;
+      return;
     }
 
     try {
       const page = ctx.pages()[0] || await ctx.newPage();
       const frame = await C.waitForTool(ctx, page, S.toolUrl, profileName);
-      if (!frame) { console.log('  [!] tool nahi mila — agli profile try karta hun'); continue; }
+      if (!frame) { console.log(`  [!] ${profileName}: tool nahi mila`); return; }
       const toolPage = frame.page();
-      console.log('  [OK] tool mil gaya');
+      console.log(`  [OK] ${profileName}: tool mil gaya`);
 
       let currentVideo = null;
-      let rotate = false;
 
       for (const v of videos) {
-        if (rotate) break;
-        while ((state.progress[v.key] || 0) < v.prompts.length) {
-          if (budget <= 0) { console.log(`  [i] ${profileName} ki limit poori — agli profile`); rotate = true; break; }
+        const slice = sliceMap[v.key][profileName];
+        if (!slice || slice.start >= slice.end) continue;   // is profile ko is video ka kaam nahi mila
 
-          // video badla ya settings gayab — dobara lagao (har video ka apna reference)
+        state.progress[v.key] = state.progress[v.key] || {};
+        let localDone = state.progress[v.key][profileName] || 0;   // slice ke andar, 0-based offset
+        const sliceLen = slice.end - slice.start;
+
+        while (localDone < sliceLen) {
+          if (budget <= 0) { console.log(`  [i] ${profileName} ki limit poori — is profile ka kaam ruk gaya`); return; }
+
           const live = await C.readSettingsFromPage(frame);
           const needChar = USE_CHAR && !!refsFor[v.key].character;
           const needStyle = !!refsFor[v.key].style;
@@ -196,65 +239,67 @@ const totalOf = (videos, state) => videos.reduce((s, v) => s + (state.progress[v
           if (currentVideo !== v.key || bad) {
             await C.applySettings(frame, { useCharacter: USE_CHAR, refs: refsFor[v.key] });
             const chk = await C.readSettingsFromPage(frame);
-            console.log(`  settings [${v.file}]  16:9=${chk.aspect === 'landscape' ? 'YES' : 'NO'}  character=${chk.cc ? chk.ccFile : 'off'}  style=${chk.sc ? chk.scFile : 'off'}`);
+            console.log(`  ${profileName} settings [${v.file}]  16:9=${chk.aspect === 'landscape' ? 'YES' : 'NO'}  character=${chk.cc ? chk.ccFile : 'off'}  style=${chk.sc ? chk.scFile : 'off'}`);
             if (chk.aspect !== 'landscape' || chk.cc !== needChar || chk.sc !== needStyle) {
-              console.log('  [X] settings theek nahi lagin — ruk gaya (galat images banane se behtar)');
-              rotate = true; break;
+              console.log(`  [X] ${profileName}: settings theek nahi lagin — ruk gaya (galat images banane se behtar)`);
+              return;
             }
             currentVideo = v.key;
           }
 
-          const done = state.progress[v.key] || 0;
-          const size = Math.min(BATCH, budget, v.prompts.length - done);
-          const batch = v.prompts.slice(done, done + size);
-          const batchNo = state.batchNo + 1;
+          const size = Math.min(BATCH, budget, sliceLen - localDone);
+          const globalStart = slice.start + localDone;   // v.prompts mein asli (global) position
+          const batch = v.prompts.slice(globalStart, globalStart + size);
+          const batchNo = ++state.batchNo; C.saveState(MODE, state);
 
           let res;
           try {
             res = await C.generateBatch(toolPage, frame, batch,
-              `${v.id}_b${String(batchNo).padStart(3, '0')}`,
-              `${v.id} [${done + 1}-${done + size}]`, PER_PROMPT_MS);
+              `${v.id}_${profileName}_b${String(batchNo).padStart(3, '0')}`,
+              `${v.id} [${globalStart + 1}-${globalStart + size}] (${profileName})`, PER_PROMPT_MS);
           } catch (e) {
-            console.log(`  [!] batch fail: ${e.message}`);
-            console.log('      agli profile par jata hun (ye prompts dobara chalengi)');
-            rotate = true; break;
+            console.log(`  [!] ${profileName} batch fail: ${e.message}`);
+            return;
           }
-
-          state.batchNo = batchNo; C.saveState(MODE, state);
 
           if (!res.zipPath || res.made === 0) {
-            console.log('  [i] koi image nahi bani — is account ki limit lagti hai. Agli profile.');
-            rotate = true; break;
+            console.log(`  [i] ${profileName}: koi image nahi bani — is account ki limit lagti hai.`);
+            return;
           }
 
-          const saved = C.saveRenamed(res.zipPath, v, done + 1, size, batchNo);
+          // startSeq = GLOBAL position (v.prompts ke andar), local slice offset nahi
+          const saved = C.saveRenamed(res.zipPath, v, globalStart + 1, size, batchNo);
           if (!saved.ok) {
+            localDone += saved.got;
+            state.progress[v.key][profileName] = localDone;
             state.used[profileName] = (state.used[profileName] || 0) + saved.got;
             budget -= saved.got;
             C.saveState(MODE, state);
-            if (saved.got === 0) { rotate = true; }
-            continue;   // ye chunk dobara chalega
+            if (saved.got === 0) return;
+            continue;
           }
 
-          state.progress[v.key] = done + size;
+          localDone += size;
+          state.progress[v.key][profileName] = localDone;
           state.used[profileName] = (state.used[profileName] || 0) + size;
           budget -= size;
           C.saveState(MODE, state);
-          console.log(`    ${v.id}: ${state.progress[v.key]}/${v.prompts.length}   |   kul: ${totalOf(videos, state)}/${totalPrompts}   |   ${profileName}: ${state.used[profileName]}/${LIMIT}`);
+          console.log(`    ${profileName} | ${v.id}: ${localDone}/${sliceLen} (apna hissa)   |   kul: ${totalOf(videos, state)}/${totalPrompts}   |   ${profileName}: ${state.used[profileName]}/${LIMIT}`);
 
           await new Promise(r => setTimeout(r, 5000 + Math.random() * 5000));
         }
-        if (!rotate && (state.progress[v.key] || 0) >= v.prompts.length) {
-          console.log(`  [done] ${v.file} mukammal -> output/${v.id}/`);
-        }
+        console.log(`  [done] ${profileName}: ${v.file} ka apna hissa mukammal`);
       }
     } catch (e) {
-      console.log(`  [!] profile error: ${e.message}`);
+      console.log(`  [!] ${profileName} error: ${e.message}`);
     } finally {
       await ctx.close().catch(() => {});
-      await new Promise(r => setTimeout(r, 3000));   // lock chhootne do
+      await new Promise(r => setTimeout(r, 3000));
     }
   }
+
+  // ---------- saari profiles EK SATH chalao ----------
+  await Promise.all(profiles.map(runProfile));
 
   const done = totalOf(videos, state);
   line();
@@ -262,8 +307,8 @@ const totalOf = (videos, state) => videos.reduce((s, v) => s + (state.progress[v
     console.log(`  KHATAM — ${done} images ban gayin. output/ folder dekho.`);
   } else {
     console.log(`  RUKA — ${done}/${totalPrompts} images banin.`);
-    console.log('  Saari profiles ki limit khatam ho gayi ya tool nahi mila.');
-    console.log('  Naye account ke liye: ADD-NEW-ACCOUNT chalao, ya kal dobara RUN chalao.');
+    console.log('  Kisi profile ki limit khatam ho gayi ya tool nahi mila.');
+    console.log('  Naye account ke liye: ADD-NEW-ACCOUNT chalao, ya dobara RUN chalao.');
     console.log('  (Progress save hai — jahan ruka tha wahin se chalega.)');
   }
   line();

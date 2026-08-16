@@ -1,11 +1,18 @@
 # ============================================================
-#  RunPod image — voice (Chatterbox, GPU) + render (ffmpeg, NVENC)
+#  Pod image — voice (Kokoro, parallel across pod cores) + render (ffmpeg)
 #
 #  Ye image sirf VOICE aur RENDER stages chalata hai. Script/prompts/images
 #  local machine par hi bantay hain (Gemini browser login yahan possible
 #  nahi, aur script/prompts generation GPU se koi faida nahi leta). Pod
 #  R2 se script.txt + images/ download karta hai, voice+render karta hai,
 #  phir final.mp4 wapas R2 par upload kar deta hai.
+#
+#  Chatterbox HATA DIYA (2026-08-17) — cloned voice ~420 wpm (3x too fast)
+#  nikli aur clarity/cloning quality bhi kharab thi, do real pod runs mein
+#  confirm hua. Kokoro (proven, 4 videos mein pehle se istemal) wapas
+#  default hai — Linux pod par multiprocessing.Pool se parallel chalta hai
+#  (Windows local machine par ye OS-level restriction se sequential chalta
+#  tha, dekho pod/kokoro_tts_pod.py).
 # ============================================================
 FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
 
@@ -28,9 +35,10 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 RUN curl https://rclone.org/install.sh | bash
 
 # ---------- python deps ----------
-# torch CUDA build zaroori hai (Chatterbox GPU par chale, CPU build nahi)
+# torch CUDA build — faster-whisper (Whisper GPU par chale) ke liye, Kokoro
+# khud CPU par bhi theek chalta hai (chhota model, 82M params)
 RUN pip3 install --no-cache-dir torch torchaudio --index-url https://download.pytorch.org/whl/cu124
-RUN pip3 install --no-cache-dir chatterbox-tts faster-whisper soundfile numpy
+RUN pip3 install --no-cache-dir kokoro faster-whisper soundfile numpy
 
 WORKDIR /app
 
