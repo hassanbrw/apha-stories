@@ -39,7 +39,15 @@ async function req(method, pathSuffix, body) {
 // Min CPU cores ka koi seedha filter field nahi (verify kiya, sirf gpu_name/
 // num_gpus/reliability2/rentable jaise ops maane) — is liye result mein se
 // khud filter karte hain.
-async function findOffer({ gpuName, minCpuCores = 40, minReliability = 0.95, maxGpuCount = 1 }) {
+// ASLI BUG (2026-08-17): "reliability2" score achi hone ke bawajood (99%+)
+// do consecutive instances "deverified" hosts par lagin — pehli ka
+// actual_status hamesha null raha (upar wala fix), doosri "Creating..."
+// mein hi atki rahi (Vast dashboard se dekha, "Status: not running").
+// `verification` field mein "verified"/"unverified"/"deverified" hoti hai —
+// "deverified" ka matlab Vast khud ne is host ko failed-verification maara
+// hai (hardware/uptime issue). Ab default mein explicitly bahar rakha,
+// warna sabse sasta offer almost hamesha yehi nikalta hai.
+async function findOffer({ gpuName, minCpuCores = 40, minReliability = 0.95, maxGpuCount = 1, excludeDeverified = true }) {
   const res = await req('POST', '/bundles', {
     gpu_name: { eq: gpuName },
     num_gpus: { lte: maxGpuCount },
@@ -49,8 +57,9 @@ async function findOffer({ gpuName, minCpuCores = 40, minReliability = 0.95, max
     type: 'on-demand',
     limit: 50,
   });
-  const offers = (res.offers || []).filter(o => (o.cpu_cores_effective || o.cpu_cores || 0) >= minCpuCores);
-  if (!offers.length) throw new Error(`koi offer nahi mila (${gpuName}, ${minCpuCores}+ cores, ${minReliability * 100}%+ reliable)`);
+  let offers = (res.offers || []).filter(o => (o.cpu_cores_effective || o.cpu_cores || 0) >= minCpuCores);
+  if (excludeDeverified) offers = offers.filter(o => o.verification !== 'deverified');
+  if (!offers.length) throw new Error(`koi offer nahi mila (${gpuName}, ${minCpuCores}+ cores, ${minReliability * 100}%+ reliable${excludeDeverified ? ', deverified hosts excluded' : ''})`);
   return offers[0]; // sabse sasta jo shart poori kare
 }
 
