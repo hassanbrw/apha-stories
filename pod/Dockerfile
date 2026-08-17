@@ -40,29 +40,20 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# ---------- ffmpeg with NVENC (2026-08-17, speed optimization) ----------
-# Ubuntu apt ka ffmpeg libass ke saath aata hai (subtitle burn-in ke liye
-# kaafi tha) lekin NVENC (NVIDIA ka hardware encoder) NAHI — Debian/Ubuntu
-# is niyat se exclude karte hain (NVIDIA Video Codec SDK proprietary hai,
-# distro licensing ise apne official build mein shamil nahi karti). Is pod
-# ke GPU (RTX 4090/5090) ka ab tak render mein koi istemal nahi ho raha
-# tha (sirf CPU libx264) — BtbN ka static build (widely-used, GPL, NVENC +
-# libass + libx264 sab shamil) apt ffmpeg ki jagah /usr/local/bin mein
-# rakh diya (PATH mein /usr/bin se pehle aata hai).
-#
-# ISOLATED via 3 fail / 1 pass A-B test (2026-08-17): ye block download URL
-# GitHub ke apne release-assets CDN (release-assets.githubusercontent.com)
-# se hoti hai — GitHub ka status page us waqt EXACT isi cheez ("archive/raw-
-# content downloads ~50% error rate") ka active incident dikha raha tha.
-# --retry curl ko is tarah ki transient download flakiness (chahe GitHub
-# ka apna incident ho ya normal network blip) khud jhelnay deta hai bina
-# poore build ko fail kiye.
-RUN curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o /tmp/ffmpeg.tar.xz \
-      https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz \
-    && mkdir -p /tmp/ffmpeg-extract && tar -xf /tmp/ffmpeg.tar.xz -C /tmp/ffmpeg-extract --strip-components=1 \
-    && cp /tmp/ffmpeg-extract/bin/ffmpeg /tmp/ffmpeg-extract/bin/ffprobe /usr/local/bin/ \
-    && rm -rf /tmp/ffmpeg.tar.xz /tmp/ffmpeg-extract \
-    && ffmpeg -version
+# NVENC (2026-08-17) SHELVED for tonight: tried swapping apt ffmpeg for a
+# BtbN static build (NVENC-enabled) via a GitHub release-asset download —
+# confirmed via a clean A-B test (build succeeds without this step, fails
+# consistently with it, even with 5 curl retries) that this specific
+# download path is unreliable right now, most likely tied to GitHub's own
+# active "archive/raw-content downloads" incident (their status page
+# showed this exact symptom at the time). Not worth blocking tonight's
+# real deliverable (concurrency fix + libass captions, both already
+# working) on this — stock apt ffmpeg still HAS libass (the bigger win),
+# just not NVENC. stages/9-render.js's detectNVENC() already fails safe
+# (h264_nvenc simply won't be a registered encoder, falls through to
+# QSV/libx264) — no code change needed there to shelve this; revisit the
+# NVENC download source in a future session with more time to verify an
+# alternate host properly.
 
 # rclone (R2 sync — S3-compatible)
 RUN curl https://rclone.org/install.sh | bash
