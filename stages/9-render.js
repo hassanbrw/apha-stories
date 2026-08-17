@@ -19,6 +19,15 @@ const os = require('os');
 const fs = require('fs'), path = require('path');
 const U = require('../lib/util.js');
 const { subSlots } = require('../lib/subslots.js');
+const { generateAssCaptions } = require('../lib/ass-captions.js');
+
+// ffmpeg filtergraph mini-language mein `:` special hai (filter-option
+// separator) — Windows drive-letter paths ('C:\...') isay tod dete. Forward
+// slashes hamesha chalte hain (Windows par bhi), is liye pehle unify karo,
+// phir bacha hua koi bhi ':' escape karo.
+function escapeFilterPath(p) {
+  return p.replace(/\\/g, '/').replace(/:/g, '\\:');
+}
 
 const W = 1920, H = 1080;
 // ek sath kitne slot clips — pehle hardcoded 3 tha aur config.json ka
@@ -54,8 +63,29 @@ function detectQSV() {
 }
 let _qsv = null;
 function useQSV() { if (_qsv === null) _qsv = detectQSV(); return _qsv; }
-// crf (CPU) aur global_quality (QSV) ek jaisa scale nahi hain, lekin dono
-// "kam = behtar quality" hain is liye seedha number pass karna theek hai.
+
+// NVENC (2026-08-17): pod ke rented RTX 4090/5090 ka hardware encoder — is
+// project mein pehli baar istemal ho raha hai (ab tak render 100% CPU-bound
+// tha, GPU bilkul khaali baithi rehti thi). Consumer NVIDIA cards par
+// concurrent NVENC sessions ki DEDICATED HARDWARE limit hoti hai (driver-
+// level cap) — CONC=128 parallel slot-clips agar sab EK SATH NVENC try
+// karte to zyadatar session-limit error se fail ho jate. Is liye NVENC
+// SIRF single-pass (threads=0) calls ke liye, jaise aakhri particles+
+// captions merge encode — wahan sirf EK session chalta hai, koi risk nahi.
+// Per-slot parallel building CPU (libx264) par hi rehta hai (already fast,
+// asli concurrency ke sath, threadsPerJob se safe cap hua).
+function detectNVENC() {
+  try {
+    execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=black:s=64x64:d=0.2',
+      '-c:v', 'h264_nvenc', '-f', 'null', '-'], { timeout: 15000 });
+    return true;
+  } catch { return false; }
+}
+let _nvenc = null;
+function useNVENC() { if (_nvenc === null) _nvenc = detectNVENC(); return _nvenc; }
+
+// crf (CPU/NVENC cq) aur global_quality (QSV) ek jaisa scale nahi hain, lekin
+// sab "kam = behtar quality" hain is liye seedha number pass karna theek hai.
 // threads=0 matlab ffmpeg apna default (saare visible cores) istemal karega —
 // akela/aakhri encode (jaise final concat mux) ke liye theek hai. Per-slot
 // PARALLEL encode ke liye (CONC clips ek sath) explicit cap zaroori hai —
@@ -64,6 +94,8 @@ function useQSV() { if (_qsv === null) _qsv = detectQSV(); return _qsv; }
 // concurrent clips hon sab aapas mein thread ke liye larte reh jate hain.
 function videoEnc(fps, crf, threads = 0) {
   const t = threads > 0 ? ['-threads', String(threads)] : [];
+  if (threads === 0 && useNVENC())
+    return ['-c:v', 'h264_nvenc', '-preset', 'p4', '-rc', 'vbr', '-cq', String(crf), '-b:v', '0', '-pix_fmt', 'yuv420p', '-r', String(fps)];
   return useQSV()
     ? ['-c:v', 'h264_qsv', '-preset', 'fast', '-global_quality', String(crf), '-pix_fmt', 'nv12', '-r', String(fps), ...t]
     : ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', String(crf), '-pix_fmt', 'yuv420p', '-r', String(fps), ...t];
@@ -385,28 +417,22 @@ module.exports = async function (spec, cfg, st) {
     if (!fs.existsSync(wordsFile)) {
       U.warn('words.json nahi mila — captions skip (stage 2 dobara chalao)');
     } else {
-      U.log('   captions (word-highlight) generate ho rahi hain...');
+      // 2026-08-17 rewrite: pehle captions.py PNG-per-word-state banata
+      // (~10K PNGs ek 55min video ke liye) phir unhein qtrle se alag alpha-
+      // video (caps.mov) mein encode kar ke overlay karta — ye do bhaari
+      // steps (~10min + intermediate encode) ab khatam. Seedha .ass likho
+      // aur ffmpeg ke NATIVE `ass=` filter se isi merge-pass mein burn karo
+      // — koi PNG, koi separate encode, koi overlay step nahi (lib/ass-
+      // captions.js dekho).
       const capsDir = U.p(id, 'captions');
       fs.mkdirSync(capsDir, { recursive: true });
-      const capsMov = path.join(capsDir, 'caps.mov');
-      const capYFile = path.join(capsDir, 'cap_y.txt');
-      if (!fs.existsSync(capsMov) || !fs.existsSync(capYFile)) {
-        // captions.py sirf ek CHHOTI strip banata hai (poora frame nahi) —
-        // bahut tez hoti hai. stdout ki aakhri line "CAP_Y=<n>" batati hai
-        // ye strip poore frame par kahan (kis Y par) chipkegi.
-        const out = execFileSync('python', [path.join(U.ROOT, 'tools', 'captions.py'),
-          wordsFile, capsDir, total.toFixed(3), String(W), String(H), String(cfg.canvas.fps),
-          cfg.captions.highlightColor || '#FFD700', cfg.captions.position || 'left-bottom'],
-          { encoding: 'utf8', timeout: 3600000 });
-        U.log('   ' + out.trim().split('\n').join('\n   '));
-        const m = out.match(/CAP_Y=(\d+)/);
-        fs.writeFileSync(capYFile, m ? m[1] : '0');
-      }
-      const capY = fs.readFileSync(capYFile, 'utf8').trim() || '0';
-      inputs.push('-i', capsMov);
-      filterParts.push(`[${curLabel}][${nextInput}:v]overlay=0:${capY}[vc]`);
+      const assFile = path.join(capsDir, 'captions.ass');
+      const info = generateAssCaptions(wordsFile, assFile, {
+        W, H, total, highlightHex: cfg.captions.highlightColor || '#FFD700',
+      });
+      U.log(`   captions.ass — ${info.groups} groups, ${info.lines} word-highlight lines`);
+      filterParts.push(`[${curLabel}]ass='${escapeFilterPath(assFile)}'[vc]`);
       curLabel = 'vc';
-      nextInput++;
     }
   }
 

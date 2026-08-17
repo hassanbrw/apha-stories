@@ -20,9 +20,18 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
 # ---------- system packages ----------
+# ASLI BUG (2026-08-17, tonight ka pod render crash ki asal wajah nikli):
+# tools/captions.py apne FONT_CANDIDATES list se pehla mojood font DHOOND kar
+# load karta hai (Windows par segoeuib.ttf, Linux fallback DejaVuSans-Bold.ttf)
+# — lekin is Docker image mein KOI font package kabhi install hi nahi hua
+# tha. Bare Ubuntu container par koi TTF file kahin nahi milti, is liye
+# ImageFont.truetype() crash ho jata — captions generate hi nahi ho pati thi,
+# render har baar wahin fail hota. fonts-dejavu-core add kar diya (wahi font
+# jo captions.py ka Linux fallback path already expect karta hai).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.11 python3-pip python3.11-venv \
     ffmpeg \
+    fonts-dejavu-core \
     curl unzip git ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
@@ -30,6 +39,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
+
+# ---------- ffmpeg with NVENC (2026-08-17, speed optimization) ----------
+# Ubuntu apt ka ffmpeg libass ke saath aata hai (subtitle burn-in ke liye
+# kaafi tha) lekin NVENC (NVIDIA ka hardware encoder) NAHI — Debian/Ubuntu
+# is niyat se exclude karte hain (NVIDIA Video Codec SDK proprietary hai,
+# distro licensing ise apne official build mein shamil nahi karti). Is pod
+# ke GPU (RTX 4090/5090) ka ab tak render mein koi istemal nahi ho raha
+# tha (sirf CPU libx264) — BtbN ka static build (widely-used, GPL, NVENC +
+# libass + libx264 sab shamil) apt ffmpeg ki jagah /usr/local/bin mein
+# rakh diya (PATH mein /usr/bin se pehle aata hai).
+RUN curl -fsSL -o /tmp/ffmpeg.tar.xz \
+      https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz \
+    && mkdir -p /tmp/ffmpeg-extract && tar -xf /tmp/ffmpeg.tar.xz -C /tmp/ffmpeg-extract --strip-components=1 \
+    && cp /tmp/ffmpeg-extract/bin/ffmpeg /tmp/ffmpeg-extract/bin/ffprobe /usr/local/bin/ \
+    && rm -rf /tmp/ffmpeg.tar.xz /tmp/ffmpeg-extract \
+    && ffmpeg -version
 
 # rclone (R2 sync — S3-compatible)
 RUN curl https://rclone.org/install.sh | bash

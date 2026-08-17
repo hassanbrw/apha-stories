@@ -33,6 +33,20 @@ Long-form (55min–2hr+) werewolf/Alpha-shifter paranormal romance audiobook-sty
 - Narration: mixes third-person (most videos) and first-person (wIdus4Umm2k opens "I kept telling myself..." over a divorce-papers walk-to-the-hall scene) — same first/third-person mixing pattern seen on Alba. Reuses character/place names across its own catalog ("Lucy," "Ashev Castle," "Ashevail," "Ashvale") — further confirms templated/AI-assisted script generation is standard practice across this niche's smaller channels, not just Alba.
 - Verbatim opening lines: "The dress had been altered three times. Lucy noticed it the moment her stepsister stepped into the light..." (yFB-vWMHk-E, top performer, 42K views) / "The papers were heavier than they should have been. I kept telling myself that as I walked down the long corridor of the Iron Veil Pax main hall..." (wIdus4Umm2k, 24K views) / "The throne room had never felt so cold. Hazel knew every stone in that corridor... 24. That was how old Hazel had been when she entered this castle as the Alpha King's wife. 27 now. 3 years of silence..." (IAVS92rQ4O4, newest upload) — this last one is a strong example of the channel's signature "years-into-a-cold-marriage" opening beat, distinct from the other three channels' "stranger/servant" openings.
 
+### Moonlit Romance Tales (@MoonlitRT)
+- Same AI-narration/AI-visual werewolf-Alpha-King niche, but a **distinctly comedic/whimsical sub-genre** — the odd one out among all researched channels. Titles almost always pair the Alpha King with a domestic mishap, an animal (cat, dog, donkey, tortoise, kangaroo, border collie, ostrich, ducklings), or a slapstick mistaken-identity beat, then land on a romantic or absurd punchline.
+- Structural signature: "[Alpha King does/experiences something undignified] — [twist/punchline, often comedic]" — e.g. "The Alpha King Could Win Any War—But Sweets, His Dentist, and a Dental Drill Totally Defeated Him," "The Strongest Alpha King Feared No Enemy… Except His Own Static Fur and His Omega Barber." Frequent parenthetical asides after the main title for an extra joke/punchline: "(HE LOVES SQUEAKY DUCK)!", "(Then a Tortoise Made It Happen)", "(He's Tone-deaf)".
+- ALL-CAPS single-word/short-phrase emphasis used as a punchline device inside the title itself: "But I Said 'RUN!'", "'DEAL', He Said", "Even A Badger Cook Better Than You".
+- Tone is genuinely comedic/cozy rather than dramatic/high-stakes — no auctions, no villains, no poison plots in the sampled titles; conflict is almost always low-stakes embarrassment or a misunderstanding, not danger. This is a real tonal outlier worth treating as its OWN sub-formula rather than blending into the dramatic mainstream style — useful for occasional variety if we ever want a lighter-tone video, but should not be the default register for this channel (mismatches the "epic romance novel" positioning already established).
+
+### Moonlight Mates Library (@MoonlightMatesLibrary)
+- Same niche, **first-person, quiet-small-gesture sub-formula** — the most understated/tender of all researched channels. Almost every title is a first-person ("I...") micro-action — a small domestic task, a chore, an overheard line of dialogue, a child's innocent question — that turns out to matter enormously to the Alpha King.
+- Structural signature: "I [did small specific physical/domestic action] — [Alpha King's quiet, disproportionate reaction]" e.g. "I Planted a Garden Outside the Alpha King's Window All Winter — He Never Once Asked What For," "I Left a Scarf on the Alpha King's Cage Every Frost Morning — He Never Told Her He'd Kept Every One." Many use a child's quoted dialogue as the hook instead of the heroine's own action: "'Every Girl Has a Father to Dance With, But I Don't,' the Child Told the Alpha King — So He Stood Up."
+- Heavy use of quoted dialogue as the opening words of the title itself (in quotation marks), a device barely used on the other channels: "'Don't Drink That, My King!'", "'Climb Up Beside Me,'", "'Pretend You're Hugging Me,'".
+- **Titles frequently end with an appended hashtag** — `#romance`, `#audiostory`, `#alphaking`, `#romancebooks`, `#visualstorytelling` — a discoverability/SEO tag stapled directly onto the end of the title sentence rather than kept separate; worth testing on our own titles.
+- Ending punctuation is almost always a trailing ellipsis (`...`) rather than a hard stop, even more consistently than the other channels — reinforces the "there's more, click to find out" curiosity gap.
+- Emotional register: patient, devotional, slow-burn tenderness — no auctions/villains/poison in the sampled titles either; the tension engine is "will he notice/reciprocate this quiet devotion," not danger or humiliation. A genuinely different emotional lane from Lily's rescue-fantasy and Alba's status-violation fear, closer in spirit to Moonlight Mates' name — worth treating as a third distinct sub-formula alongside the dramatic mainstream and Moonlit's comedic lane.
+
 ## Titles ka andaz (formulas + real examples)
 
 ### Shared vocabulary across all four channels
@@ -110,13 +124,30 @@ This channel's dominant hook is a marriage already in progress or already ending
 - "The Alpha King Divorced Her Without Looking Back… Five Years Later, a Little Girl Called Him 'Daddy'"
 - "Married 3 Years, the Alpha King Ignored Her — Until His First Love Returned and She Divorced Him"
 
-### Title mechanics (all four channels)
-- Length: roughly 12–20 words, one sentence broken by a dash/em-dash (`-`, `—`) or ellipsis into setup + twist.
-- Almost always third-person ("She...", "The Alpha King...") on Lily's and Ultimate Werewolf Romance; Alba mixes third-person narration with first/second-person quoted dialogue inside the title itself.
-- Trailing ellipses (`...`) used to imply "and there's more" — very common across all four channels, and Ultimate Werewolf Romance also uses a mid-title ellipsis to separate setup from twist ("He Called His Mate 'Barren'…She Returned...") more often than a dash.
+### Formula 11 (Moonlit Romance Tales's signature) — Comedic/whimsical domestic-mishap
+Alpha King undergoes an undignified, funny, or animal-related mishap; punchline lands as charming/romantic rather than dramatic. Use sparingly, as an occasional tonal variety piece, not the channel default.
+- "The Alpha King Banned All Pets, Until He Was Caught Cuddling My Fat Orange Cat at Midnight"
+- "The Mighty Alpha King Woke Up Bald… So I Had to Hide His Secret Before Everyone Saw"
+- "I Read the Alpha King's Prophecy…It Said He Would Fall Into My Arms (Then a Tortoise Made It Happen)"
+- "The Alpha King and I Had to Fake Being Lovers… We Both Hated How Ridiculous It Was. Blame My Donkey!"
+
+### Formula 12 (Moonlight Mates Library's signature) — First-person quiet-gesture / devotion
+A small, specific first-person domestic action or an overheard child's line, paid off by the Alpha King's quiet, disproportionate emotional reaction. Slow-burn, tender, no villain/danger required.
+- "I Planted a Garden Outside the Alpha King's Window All Winter — He Never Once Asked What For"
+- "I Left a Scarf on the Alpha King's Cage Every Frost Morning — He Never Told Her He'd Kept Every One"
+- "'Every Girl Has a Father to Dance With, But I Don't,' the Child Told the Alpha King — So He Stood Up"
+- "The Guards Never Noticed She Always Spilled Water Walking Past the Alpha King's Cell — But He Did..."
+
+### Title mechanics (all six channels)
+- Length: roughly 12–20 words, one sentence broken by a dash/em-dash (`-`, `—`) or ellipsis into setup + twist. Moonlight Mates Library runs slightly longer/more clause-heavy when opening on quoted dialogue.
+- Almost always third-person ("She...", "The Alpha King...") on Lily's and Ultimate Werewolf Romance; Alba mixes third-person narration with first/second-person quoted dialogue inside the title itself. Moonlit and Moonlight Mates lean heavily first-person ("I...").
+- Trailing ellipses (`...`) used to imply "and there's more" — very common across all channels, and Ultimate Werewolf Romance also uses a mid-title ellipsis to separate setup from twist ("He Called His Mate 'Barren'…She Returned...") more often than a dash. Moonlight Mates Library uses a trailing ellipsis on nearly every single title, more consistently than any other channel.
 - Numbers used for concreteness/stakes: "8 years," "18 years," "100 princesses," "30 to 1," "20 surgeons," "2 hours later," "four children," "three Alpha Kings."
 - Never reveal the ending — title stops at the moment of the twist/reveal, not the resolution.
-- Ultimate Werewolf Romance appends a genre/format suffix after a pipe on some titles (`| Werewolf Shifter Romance Audiobook`, `| Alpha King ⭐`) — functions as an SEO/genre tag rather than part of the hook sentence itself; worth doing on our own titles for discoverability.
+- Ultimate Werewolf Romance appends a genre/format suffix after a pipe on some titles (`| Werewolf Shifter Romance Audiobook`, `| Alpha King ⭐`) — functions as an SEO/genre tag rather than part of the hook sentence itself. Moonlight Mates Library does something similar but appends a bare hashtag instead of a pipe-suffix (`#romance`, `#audiostory`, `#alphaking`) — both worth testing on our own titles for discoverability.
+- Quoted dialogue AS the opening words of the title (in quotation marks) is Moonlight Mates Library's signature device, rare elsewhere: `"Don't Drink That, My King!"—The Maid's Daughter Warned...`
+- Parenthetical punchline asides after the main clause are Moonlit's signature device: `(HE LOVES SQUEAKY DUCK)!`, `(Then a Tortoise Made It Happen)`.
+- Short ALL-CAPS emphasis words/phrases as a punchline are also a Moonlit-specific device: "But I Said 'RUN!'", "'DEAL', He Said".
 
 ## Script ka andaz (hook, lehja, structure)
 
@@ -225,7 +256,7 @@ have to supply one. Before starting any new video:
    patterns (see "Titles ka andaz" above) — auction/trade, hidden identity,
    time-skip, twins/pups, rejection-then-reclaimed, hidden-skill-reveal,
    public betrayal/mate-marks-another, presumed-dead reunion, divorce/marriage-
-   crisis. Prefer an idea from "## 15-20 topic ideas" below if one hasn't been
+   crisis. Prefer an idea from "## 50 topic ideas" below if one hasn't been
    used yet; once that list is exhausted, invent a new one following the same
    formula patterns.
 2. Check it against "## Used topics" below — if the core twist/trope
@@ -250,9 +281,9 @@ have to supply one. Before starting any new video:
 - 2026-08-16 — a war-orphaned nurse is the only one the comatose Alpha King responds to; he wakes remembering only her voice and the court must explain who she is — work/comatose-king-nurse-voice/
 - 2026-08-17 — an elderly healer is de-aged into a stranger by a botched spell; the Alpha King she once saved as a boy searches for his old healer, never suspecting she's the young woman now treating him — work/deaged-healer-forgotten-debt/
 
-## 15-20 topic ideas
+## 50 topic ideas
 
-Original premises in the same tropes/formula patterns (auction/trade, hidden identity, time-skip, twins/pups, rejection-then-reclaimed, hidden-skill-reveal), not copies of existing titles:
+Original premises in the same tropes/formula patterns (auction/trade, hidden identity, time-skip, twins/pups, rejection-then-reclaimed, hidden-skill-reveal, quiet-devotion/small-gesture — see Formula 12), not copies of existing titles. Ideas 1-25 drawn from the original four competitor channels; 26-50 added 2026-08-17 after reviewing ~180 real titles across three more channels (Lily's Romance Library, Moonlit Romance Tales, Moonlight Mates Library) specifically to keep this pool well ahead of actual usage — top up again once fewer than ~15 remain unused:
 
 1. A blind seamstress is the only one who can sense the Alpha King is being poisoned by taste alone — he refuses to eat unless she tastes his food first, and slowly falls for her.
 2. The Alpha King's arranged bride swaps places with her disfigured twin sister at the altar, expecting rejection — he already knew, and married the wrong sister on purpose.
@@ -279,3 +310,28 @@ Original premises in the same tropes/formula patterns (auction/trade, hidden ide
 23. Cursed to only be believed by wolves, not humans or shifters, an outcast healer is the sole witness to the Beta's plot to fake the Alpha King's death and seize the throne during the chaos.
 24. Three cold, silent years into an arranged marriage, the Luna finally signs the divorce papers the same week she discovers she's pregnant — and hides both from the Alpha King until he shows up at her family's door.
 25. The Alpha King's first wife was declared unfit to bear an heir and quietly divorced; when his second marriage fails to produce one either, the pack elders demand to know why he still visits her cottage every full moon.
+26. A servant girl leaves a bowl of stew outside the imprisoned Alpha King's cell every night for a year, never once speaking to him — the night he's finally freed, he asks the guards for her name before his own crown.
+27. Every bride the Alpha King has taken has died within a week of the mating bond — the seventh, a laundress with nothing left to lose, survives, and no one — least of all him — can explain why.
+28. A blind stable girl mistakes the wandering Alpha King for a hired hand and orders him to muck out the stalls three times before anyone tells her who he is.
+29. The Alpha King's twin sons bite every noblewoman brought before them at the choosing ceremony — until a rejected kitchen maid, there only to serve the wine, is the one they curl up beside.
+30. A widowed healer spends every full moon calming the Alpha King's war-wolf as it howls itself raw in a locked cellar — she's the only one who's ever seen what he becomes, and the only one who isn't afraid of it.
+31. The Alpha King's court believes his mate died at sea; when a fisherman's daughter with no memory of her past washes ashore on his land, only his wolf recognizes the scent no one else can.
+32. A pack outcast is hired to write the Alpha King's official biography for the coronation — every interview quietly turns into something neither of them meant it to become.
+33. The Alpha King's mother stages a "trial bride" competition among the palace servants as a political joke to appease the court — the one girl who refuses to enter is the one he corners afterward to ask why.
+34. A maid's young daughter tells the Alpha King her mother has a ring just like his — he goes still, because it's the one he buried with the woman he thought he'd lost.
+35. A war-orphaned girl is traded to the Alpha King's court for three barrels of grain and a forgiven debt — he burns the contract in front of the noble who sold her before anyone can stop him.
+36. The Alpha King's guards are ordered never to let anyone meet his eyes — a new kitchen girl forgets once, and he's the one who never forgets it either.
+37. A pregnant widow's cart breaks an axle on the Alpha King's only road during a blizzard — he climbs down himself before any of his guards can move.
+38. The Alpha King collapses mid-feast from a poisoned cup meant for his Beta — the only person who moves toward him instead of away is the serving girl everyone else steps over.
+39. A kitchen maid is ordered to poison the Alpha King's evening wine by the same noble who's blackmailing her family — she has one cup, one chance, and no idea he already knows.
+40. The Alpha King's youngest cub hides inside a servant's cloak during a court ceremony and refuses to come out for anyone but her — including his own father.
+41. A traveling healer immune to a wolfsbane plague sweeping the Alpha King's territory is quarantined inside his own private wing for her safety — neither of them expected the isolation to be the easy part.
+42. The Alpha King is sent to negotiate a hostile-territory marriage and is given a decoy bride to protect the real princess from assassination — he falls for the decoy before the wedding party even reaches the gate.
+43. A servant girl has spent three years signing the Alpha King's personal letters in his name because he never learned to read past a childhood injury — no one else in the castle knows, including his own council.
+44. The Alpha King's rejected first Luna returns to court a decade later as an anonymous stable hand the same season his council forces him to choose a second — he recognizes her scent before he sees her face.
+45. A single mother waitressing near the Alpha King's border hides her son's early shift from the entire town — until the boy shifts publicly to save a stranger's life, and the stranger turns out to be the King himself.
+46. The Alpha King is cursed to appear as an ordinary woodcutter to everyone except the one person fated to see him clearly — a firewood-seller who's been scolding him for slow deliveries for a month.
+47. A pack healer's apprentice is the only one who can hear the Alpha King's wolf grieving through the walls of the royal wing — everyone else thinks the King has simply gone silent since the funeral.
+48. The Alpha King's arranged bride is smuggled out of the wedding in a hay cart by a nobody stable girl who's mistaken for the bride herself when the carriage is ambushed on the road.
+49. A seamstress spends a decade secretly repairing the Alpha King's late wife's belongings so his grieving daughter never has to know they were damaged — he finds out the week the girl turns the same age her mother was when she died.
+50. The Alpha King orders his entire court never to speak of his missing brother again — a new record-keeper stumbles onto a name that was supposed to be erased, and he asks her to keep looking instead of punishing her for finding it.
