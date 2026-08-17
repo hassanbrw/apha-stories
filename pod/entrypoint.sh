@@ -8,6 +8,12 @@
 #    VOICE_ID               — (optional) Kokoro voice preset, default "am_adam"
 #    VOICE_SPEED             — (optional) default "1.0"
 #    WHISPER_MODEL          — (optional) default "small"
+#    RENDER_ONLY            — (optional) "1" ho to voice regenerate NAHI
+#                              hogi — R2 par pehle se maujood voice/ istemal
+#                              hogi (upload karne wala script ye pehle khud
+#                              upload karta hai). Sirf render chalta hai,
+#                              phir final.mp4 upload — jab voice already
+#                              achi/verified ho to naya Kokoro run zaya waqt.
 #    VOICE_ONLY             — (optional) "1" ho to sirf voice bana kar wapas
 #                              upload karo, render bilkul mat chalao (render
 #                              CPU-bound hai, GPU se koi faida nahi — is liye
@@ -49,6 +55,30 @@ RCLONE="rclone --config $RCLONE_CONF --s3-no-check-bucket"
 echo "== R2 se script.txt download ho raha hai =="
 mkdir -p /app/videos
 $RCLONE copy "r2:${R2_BUCKET}/${VIDEO_ID}/script.txt" "$WORKDIR/"
+
+# RENDER_ONLY: voice/ pehle se achi/verified hai (ek pehle wale pod run se),
+# dobara Kokoro chalana sirf paisa aur waqt zaya karta — seedha R2 se
+# maujooda voice/ utha kar render par chale jao.
+if [ "${RENDER_ONLY:-0}" = "1" ]; then
+  echo "== RENDER_ONLY=1 — voice regenerate NAHI hogi, R2 se maujooda voice/ + timeline/images download ho rahe hain =="
+  $RCLONE copy "r2:${R2_BUCKET}/${VIDEO_ID}/spec/${VIDEO_SPEC_FILE}" "/app/videos/"
+  $RCLONE copy "r2:${R2_BUCKET}/${VIDEO_ID}/timeline.json" "$WORKDIR/"
+  $RCLONE copy "r2:${R2_BUCKET}/${VIDEO_ID}/images/" "$WORKDIR/images/"
+  $RCLONE copy "r2:${R2_BUCKET}/${VIDEO_ID}/thumbnail/" "$WORKDIR/thumbnail/" || true
+  $RCLONE copy "r2:${R2_BUCKET}/${VIDEO_ID}/voice/" "$WORKDIR/voice/"
+  echo "== RENDER (ffmpeg clips + overlay + mux) =="
+  cd /app
+  PODCORES=$(nproc)
+  export RENDER_CONC=$(( PODCORES < 128 ? PODCORES : 128 ))
+  echo "   RENDER_CONC=${RENDER_CONC} (pod cores: ${PODCORES})"
+  node run.js --video="${VIDEO_ID}" --only=render
+  echo "== R2 par final.mp4 + captions/ upload ho raha hai =="
+  $RCLONE copy "$WORKDIR/final.mp4" "r2:${R2_BUCKET}/${VIDEO_ID}/"
+  $RCLONE copy "$WORKDIR/captions/" "r2:${R2_BUCKET}/${VIDEO_ID}/captions/" || true
+  echo "== KHATAM — final.mp4 R2 par ready hai: ${VIDEO_ID}/final.mp4 =="
+  exit 0
+fi
+
 if [ "${VOICE_ONLY:-0}" != "1" ] && [ "${WAIT_FOR_IMAGES:-0}" != "1" ]; then
   echo "== R2 se video spec + images/ + timeline.json bhi download ho raha hai =="
   $RCLONE copy "r2:${R2_BUCKET}/${VIDEO_ID}/spec/${VIDEO_SPEC_FILE}" "/app/videos/"

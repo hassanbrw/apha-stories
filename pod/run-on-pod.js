@@ -3,7 +3,7 @@
 //
 //  istemal:
 //    node pod/run-on-pod.js --video="<id>"                          (Vast.ai, default — voice+render dono)
-//    node pod/run-on-pod.js --video="<id>" --voice-only              (sirf voice, render skip)
+//    node pod/run-on-pod.js --video="<id>" --render-only             (voice/ pehle se local mein achi hai, seedha render)
 //    node pod/run-on-pod.js --video="<id>" --provider=runpod --gpu="NVIDIA A100 80GB PCIe"
 //    node pod/run-on-pod.js --video="<id>" --provider=vast --gpu="RTX 5090" --min-cores=90
 //
@@ -48,6 +48,10 @@ const arg = (name, def = null) => {
   const imageName = U.env().POD_IMAGE_NAME;
   if (!imageName) { U.bad('.env mein POD_IMAGE_NAME nahi mila (Docker image jo push ki gayi hai)'); process.exit(1); }
 
+  // RENDER_ONLY: voice/ already achi/verified hai (pichle pod run se) — dobara
+  // Kokoro chalana sirf paisa aur waqt zaya karta, seedha render par jao.
+  const renderOnly = process.argv.includes('--render-only');
+
   const wd = U.workDir(id);
   for (const f of ['script.txt', 'timeline.json']) {
     if (!fs.existsSync(U.p(id, f))) { U.bad(`${f} nahi mila — pehle local pipeline se ye stages chala lo`); process.exit(1); }
@@ -55,13 +59,17 @@ const arg = (name, def = null) => {
   if (!fs.existsSync(U.p(id, 'images')) || !fs.readdirSync(U.p(id, 'images')).length) {
     U.bad('images/ khaali hai — pehle local se images stage chala lo'); process.exit(1);
   }
+  if (renderOnly && !fs.existsSync(U.p(id, 'voice', 'voiceover.mp3'))) {
+    U.bad('--render-only diya lekin voice/voiceover.mp3 nahi mila'); process.exit(1);
+  }
 
-  U.log(`\n== R2 par upload: video spec, script, timeline, images, thumbnail ==`);
+  U.log(`\n== R2 par upload: video spec, script, timeline, images, thumbnail${renderOnly ? ', voice' : ''} ==`);
   R2.upload(id, path.join(U.ROOT, 'videos', videos[0]), `spec/${videos[0]}`);
   R2.upload(id, U.p(id, 'script.txt'), 'script.txt');
   R2.upload(id, U.p(id, 'timeline.json'), 'timeline.json');
   R2.upload(id, U.p(id, 'images'), 'images');
   if (fs.existsSync(U.p(id, 'thumbnail'))) R2.upload(id, U.p(id, 'thumbnail'), 'thumbnail');
+  if (renderOnly) R2.upload(id, U.p(id, 'voice'), 'voice');
   U.ok('upload mukammal');
 
   const e = U.env();
@@ -73,6 +81,7 @@ const arg = (name, def = null) => {
     WHISPER_MODEL: e.WHISPER_MODEL || 'small',
     VOICE_ID: cfg.voice?.id || 'am_adam',
     VOICE_SPEED: String(cfg.voice?.speed || '1.0'),
+    ...(renderOnly ? { RENDER_ONLY: '1' } : {}),
   };
 
   let instanceId, waitFn, destroyFn;
