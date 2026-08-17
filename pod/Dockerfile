@@ -40,21 +40,18 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# ---------- ffmpeg with NVENC (2026-08-17, speed optimization) ----------
-# Ubuntu apt ka ffmpeg libass ke saath aata hai (subtitle burn-in ke liye
-# kaafi tha) lekin NVENC (NVIDIA ka hardware encoder) NAHI — Debian/Ubuntu
-# is niyat se exclude karte hain (NVIDIA Video Codec SDK proprietary hai,
-# distro licensing ise apne official build mein shamil nahi karti). Is pod
-# ke GPU (RTX 4090/5090) ka ab tak render mein koi istemal nahi ho raha
-# tha (sirf CPU libx264) — BtbN ka static build (widely-used, GPL, NVENC +
-# libass + libx264 sab shamil) apt ffmpeg ki jagah /usr/local/bin mein
-# rakh diya (PATH mein /usr/bin se pehle aata hai).
-RUN curl -fsSL -o /tmp/ffmpeg.tar.xz \
-      https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz \
-    && mkdir -p /tmp/ffmpeg-extract && tar -xf /tmp/ffmpeg.tar.xz -C /tmp/ffmpeg-extract --strip-components=1 \
-    && cp /tmp/ffmpeg-extract/bin/ffmpeg /tmp/ffmpeg-extract/bin/ffprobe /usr/local/bin/ \
-    && rm -rf /tmp/ffmpeg.tar.xz /tmp/ffmpeg-extract \
-    && ffmpeg -version
+# ---------- ffmpeg with NVENC: TEMPORARILY DISABLED for diagnosis ----------
+# (2026-08-17) Three consecutive build failures at ~80-90s, right around
+# where GitHub's own status page currently shows "~50% error rate on
+# archive/raw-content downloads" (active incident, 16:16 UTC). Removing
+# this block to test in isolation whether it's specifically this heavy
+# download step or a broader issue — re-add once isolated.
+# RUN curl -fsSL -o /tmp/ffmpeg.tar.xz \
+#       https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz \
+#     && mkdir -p /tmp/ffmpeg-extract && tar -xf /tmp/ffmpeg.tar.xz -C /tmp/ffmpeg-extract --strip-components=1 \
+#     && cp /tmp/ffmpeg-extract/bin/ffmpeg /tmp/ffmpeg-extract/bin/ffprobe /usr/local/bin/ \
+#     && rm -rf /tmp/ffmpeg.tar.xz /tmp/ffmpeg-extract \
+#     && ffmpeg -version
 
 # rclone (R2 sync — S3-compatible)
 RUN curl https://rclone.org/install.sh | bash
