@@ -1,5 +1,5 @@
 # ============================================================
-#  Pod image -- voice (Kokoro, parallel across pod cores) + render (ffmpeg)
+#  Pod image: voice (Kokoro, parallel across pod cores) + render (ffmpeg)
 #
 #  Ye image sirf VOICE aur RENDER stages chalata hai. Script/prompts/images
 #  local machine par hi bantay hain (Gemini browser login yahan possible
