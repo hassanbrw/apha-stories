@@ -80,7 +80,14 @@ async function waitUntilExited(id, { intervalMs = 20000, timeoutMs = 90 * 60 * 1
   const t0 = Date.now();
   while (Date.now() - t0 < timeoutMs) {
     const res = await getInstance(id);
-    const status = res?.instances?.actual_status;
+    // ASLI BUG (2026-08-17): kuch hosts par `actual_status` hamesha null
+    // aata hai (confirmed real case — instance genuinely "running" tha per
+    // `cur_state`, lekin `actual_status` kabhi kuch bhi nahi bharta) — is
+    // liye poll loop hamesha "(booting)" print karta rehta, chahe instance
+    // kabhi "exited" ho bhi jaye — 90 min timeout tak kabhi pata hi nahi
+    // chalta. `cur_state` fallback ke taur par istemal karo jab `actual_status`
+    // maujood na ho.
+    const status = res?.instances?.actual_status || res?.instances?.cur_state;
     U.log(`   instance ${id}: ${status ?? '(booting)'}`);
     if (status && /exited/i.test(status)) return res;
     if (status && /unknown|error/i.test(status)) throw new Error(`instance ${id} status "${status}" — kuch ghalat hua, dashboard check karo`);
