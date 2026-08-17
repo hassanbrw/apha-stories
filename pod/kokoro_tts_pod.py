@@ -179,13 +179,19 @@ def main():
     print(f"voiceover.mp3 - {dur:.1f}s ({dur / 60:.2f} min)", flush=True)
 
     # ---------- Whisper: word-level timing wapas nikalo ----------
-    print(f"Whisper ({WHISPER_MODEL}) se word timing nikaal raha hun...", flush=True)
+    # Kokoro ka Pool ab band ho chuka hai (koi aur fork nahi hoga is process
+    # mein) — is liye CUDA yahan wapas khol sakte hain, GPU-speed Whisper ke
+    # liye. Fork-crash ka khatra sirf Kokoro workers ke saath tha.
+    os.environ.pop('CUDA_VISIBLE_DEVICES', None)
+    print(f"Whisper ({WHISPER_MODEL}) se word timing nikaal raha hun (GPU koshish)...", flush=True)
     from faster_whisper import WhisperModel
 
-    # CUDA_VISIBLE_DEVICES='' upar module-level par set hai (Kokoro fork-crash
-    # se bachne ke liye) — is poore process ke liye CUDA kabhi nahi dikhega,
-    # is liye Whisper bhi seedha CPU par (koi wasted cuda-try-then-fail nahi)
-    wmodel = WhisperModel(WHISPER_MODEL, device='cpu', compute_type='int8')
+    try:
+        wmodel = WhisperModel(WHISPER_MODEL, device='cuda', compute_type='float16')
+        print("Whisper GPU par chal raha hai", flush=True)
+    except Exception as e:
+        print(f"Whisper GPU fail ({e}) — CPU par jaa raha hun", flush=True)
+        wmodel = WhisperModel(WHISPER_MODEL, device='cpu', compute_type='int8')
     segments, info = wmodel.transcribe(str(out_mp3), word_timestamps=True, language='en')
 
     words, cues = [], []
