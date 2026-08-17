@@ -46,7 +46,14 @@ def _safe_worker_cap():
             for line in f:
                 if line.startswith('MemAvailable:'):
                     kb = int(line.split()[1])
-                    return max(1, int((kb / 1024 / 1024) / 2.0))  # GB / 2GB-per-worker (observed ~1.16GB/worker, extra margin after the OOM loss)
+                    # ASLI BUG #2 (2026-08-18, 96-core/80GB host): 2.0GB/worker
+                    # dobara wahi hang laya — bigger host = zyada MemAvailable =
+                    # zyada computed cap (40 workers yahan), aur 40 parallel
+                    # PyTorch+Kokoro+numpy processes ka asli footprint 2GB se
+                    # zyada nikla (chunk 49/77 par ruk gaya, cpu_util 0%, wahi
+                    # "Pool dead workers ka wait" signature). 3.0 + hard 32
+                    # ceiling taake bade hosts par bhi kabhi control se bahar na jaye.
+                    return max(1, min(32, int((kb / 1024 / 1024) / 3.0)))
     except Exception:
         pass
     return 32  # /proc/meminfo na mile (non-Linux) to conservative fallback

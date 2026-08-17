@@ -3,6 +3,7 @@
 //
 //  istemal:
 //    node pod/run-on-pod.js --video="<id>"                          (Vast.ai, default — voice+render dono)
+//    node pod/run-on-pod.js --video="<id>" --voice-only              (sirf voice, timeline/images abhi nahi bane)
 //    node pod/run-on-pod.js --video="<id>" --render-only             (voice/ pehle se local mein achi hai, seedha render)
 //    node pod/run-on-pod.js --video="<id>" --provider=runpod --gpu="NVIDIA A100 80GB PCIe"
 //    node pod/run-on-pod.js --video="<id>" --provider=vast --gpu="RTX 5090" --min-cores=90
@@ -51,24 +52,37 @@ const arg = (name, def = null) => {
   // RENDER_ONLY: voice/ already achi/verified hai (pichle pod run se) — dobara
   // Kokoro chalana sirf paisa aur waqt zaya karta, seedha render par jao.
   const renderOnly = process.argv.includes('--render-only');
+  // VOICE_ONLY: fresh video — timeline/images abhi bane hi nahi (wo voice ki
+  // word-timing par depend karte hain). Sirf voice bana kar wapas lao, phir
+  // local se timeline/prompts/images chalao, phir doosri dafa --render-only
+  // se render ke liye pod rent karo. (2026-08-18 — pehle sirf entrypoint.sh
+  // mein server-side ye mode maujood tha, CLI se kabhi expose nahi hua tha.)
+  const voiceOnly = process.argv.includes('--voice-only');
+  if (renderOnly && voiceOnly) { U.bad('--render-only aur --voice-only dono ek sath nahi de sakte'); process.exit(1); }
 
   const wd = U.workDir(id);
-  for (const f of ['script.txt', 'timeline.json']) {
-    if (!fs.existsSync(U.p(id, f))) { U.bad(`${f} nahi mila — pehle local pipeline se ye stages chala lo`); process.exit(1); }
-  }
-  if (!fs.existsSync(U.p(id, 'images')) || !fs.readdirSync(U.p(id, 'images')).length) {
-    U.bad('images/ khaali hai — pehle local se images stage chala lo'); process.exit(1);
+  if (!voiceOnly) {
+    for (const f of ['script.txt', 'timeline.json']) {
+      if (!fs.existsSync(U.p(id, f))) { U.bad(`${f} nahi mila — pehle local pipeline se ye stages chala lo`); process.exit(1); }
+    }
+    if (!fs.existsSync(U.p(id, 'images')) || !fs.readdirSync(U.p(id, 'images')).length) {
+      U.bad('images/ khaali hai — pehle local se images stage chala lo'); process.exit(1);
+    }
+  } else if (!fs.existsSync(U.p(id, 'script.txt'))) {
+    U.bad('script.txt nahi mila — pehle script stage chala lo'); process.exit(1);
   }
   if (renderOnly && !fs.existsSync(U.p(id, 'voice', 'voiceover.mp3'))) {
     U.bad('--render-only diya lekin voice/voiceover.mp3 nahi mila'); process.exit(1);
   }
 
-  U.log(`\n== R2 par upload: video spec, script, timeline, images, thumbnail${renderOnly ? ', voice' : ''} ==`);
+  U.log(`\n== R2 par upload: video spec, script${voiceOnly ? '' : ', timeline, images, thumbnail'}${renderOnly ? ', voice' : ''} ==`);
   R2.upload(id, path.join(U.ROOT, 'videos', videos[0]), `spec/${videos[0]}`);
   R2.upload(id, U.p(id, 'script.txt'), 'script.txt');
-  R2.upload(id, U.p(id, 'timeline.json'), 'timeline.json');
-  R2.upload(id, U.p(id, 'images'), 'images');
-  if (fs.existsSync(U.p(id, 'thumbnail'))) R2.upload(id, U.p(id, 'thumbnail'), 'thumbnail');
+  if (!voiceOnly) {
+    R2.upload(id, U.p(id, 'timeline.json'), 'timeline.json');
+    R2.upload(id, U.p(id, 'images'), 'images');
+    if (fs.existsSync(U.p(id, 'thumbnail'))) R2.upload(id, U.p(id, 'thumbnail'), 'thumbnail');
+  }
   if (renderOnly) R2.upload(id, U.p(id, 'voice'), 'voice');
   U.ok('upload mukammal');
 
@@ -82,6 +96,7 @@ const arg = (name, def = null) => {
     VOICE_ID: cfg.voice?.id || 'am_adam',
     VOICE_SPEED: String(cfg.voice?.speed || '1.0'),
     ...(renderOnly ? { RENDER_ONLY: '1' } : {}),
+    ...(voiceOnly ? { VOICE_ONLY: '1' } : {}),
   };
 
   let instanceId, waitFn, destroyFn;
@@ -109,26 +124,36 @@ const arg = (name, def = null) => {
   }
 
   try {
-    U.log(`\n== voice+render khatam hone ka intezaar (poll ~20s) ==`);
+    U.log(`\n== ${voiceOnly ? 'voice' : 'voice+render'} khatam hone ka intezaar (poll ~20s) ==`);
     await waitFn();
     U.ok('kaam khatam');
 
-    U.log(`\n== R2 se wapas download: final.mp4, voice/, captions/ ==`);
-    R2.download(id, 'final.mp4', wd);
-    R2.download(id, 'voice', U.p(id, 'voice'));
-    R2.download(id, 'captions', U.p(id, 'captions'));
-    // ASLI BUG (2026-08-17): pehle ye line unconditionally "✓ mil gayi" print
-    // karti thi chahe download kuch laaya ho ya nahi (rclone copy ek missing
-    // remote file par chup-chaap kuch nahi karta, error nahi deta) — pod ka
-    // render crash ho gaya tha (concat ke baad, particles/captions ya final
-    // mux mein) lekin waitUntilExited sirf "exited" status dekhta hai, exit
-    // CODE nahi — is liye poora flow "success" dikha, jab k final.mp4 kabhi
-    // bana hi nahi. Ab download ke baad file ka wajood + size khud check.
-    const finalPath = path.join(wd, 'final.mp4');
-    if (!fs.existsSync(finalPath) || fs.statSync(finalPath).size < 1024) {
-      throw new Error(`final.mp4 download ke baad bhi nahi mila (ya khaali hai) — pod ka render crash hua hoga, R2 par kabhi upload hi nahi hui. Video ID: ${id}`);
+    if (voiceOnly) {
+      U.log(`\n== R2 se wapas download: voice/ ==`);
+      R2.download(id, 'voice', U.p(id, 'voice'));
+      const voPath = U.p(id, 'voice', 'voiceover.mp3');
+      if (!fs.existsSync(voPath) || fs.statSync(voPath).size < 1024) {
+        throw new Error(`voice/voiceover.mp3 download ke baad bhi nahi mila (ya khaali hai) — pod ka voice-gen crash hua hoga. Video ID: ${id}`);
+      }
+      U.ok(`voice mil gayi: work/${id}/voice/ (${(fs.statSync(voPath).size / 1048576).toFixed(1)} MB)`);
+    } else {
+      U.log(`\n== R2 se wapas download: final.mp4, voice/, captions/ ==`);
+      R2.download(id, 'final.mp4', wd);
+      R2.download(id, 'voice', U.p(id, 'voice'));
+      R2.download(id, 'captions', U.p(id, 'captions'));
+      // ASLI BUG (2026-08-17): pehle ye line unconditionally "✓ mil gayi" print
+      // karti thi chahe download kuch laaya ho ya nahi (rclone copy ek missing
+      // remote file par chup-chaap kuch nahi karta, error nahi deta) — pod ka
+      // render crash ho gaya tha (concat ke baad, particles/captions ya final
+      // mux mein) lekin waitUntilExited sirf "exited" status dekhta hai, exit
+      // CODE nahi — is liye poora flow "success" dikha, jab k final.mp4 kabhi
+      // bana hi nahi. Ab download ke baad file ka wajood + size khud check.
+      const finalPath = path.join(wd, 'final.mp4');
+      if (!fs.existsSync(finalPath) || fs.statSync(finalPath).size < 1024) {
+        throw new Error(`final.mp4 download ke baad bhi nahi mila (ya khaali hai) — pod ka render crash hua hoga, R2 par kabhi upload hi nahi hui. Video ID: ${id}`);
+      }
+      U.ok(`final.mp4 mil gayi: work/${id}/final.mp4 (${(fs.statSync(finalPath).size / 1048576).toFixed(1)} MB)`);
     }
-    U.ok(`final.mp4 mil gayi: work/${id}/final.mp4 (${(fs.statSync(finalPath).size / 1048576).toFixed(1)} MB)`);
   } finally {
     U.log(`\n== instance DELETE kar raha hun (paisa bachane ke liye — sirf stop nahi) ==`);
     await destroyFn().catch(err => U.warn(`delete fail: ${err.message} — dashboard se khud check kar lo`));

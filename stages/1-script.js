@@ -93,6 +93,28 @@ function clean(text) {
 }
 const countWords = t => String(t).split(/\s+/).filter(Boolean).length;
 
+// TOPIC FIDELITY (real check, 2026-08-18) — pichla check sirf ye dekhta tha ke
+// model ke apne hallucinated keyEvents uske apne beats mein cover hue ya nahi
+// (self-consistency), lekin agar model shuru se hi ek GHALAT/alag topic
+// (misal generic "secret healer" plot) bana kar us par consistent reh jaye,
+// wo check kabhi pakarh nahi pata tha. Ye asal mein hua — ek poori 10k-word
+// script ek bilkul alag kahani (forbidden magic/healer) par ban gayi jab
+// topic "illiterate king / secret letters" tha. Ab keyEvents ko ASAL topic
+// text se compare karte hain (shared distinctive words), na ke sirf apne aap se.
+const STOPWORDS = new Set(['about','after','again','alpha','always','and','another','anyone','anything','around','away','back','because','been','before','being','between','both','castle','council','court','during','each','either','even','ever','every','everyone','everything','finally','first','from','have','having','herself','himself','however','into','itself','just','king','kingdom','know','knows','last','later','least','love','many','more','most','much','must','never','night','none','once','only','other','over','pack','people','place','quiet','right','same','she','should','since','some','someone','something','still','such','that','their','them','then','there','these','they','this','those','three','through','time','times','together','under','until','very','wants','were','what','when','where','which','while','will','with','without','would','years','your']);
+function significantWords(text) {
+  return new Set(String(text).toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/)
+    .filter(w => w.length >= 5 && !STOPWORDS.has(w)));
+}
+function topicFidelityScore(topic, keyEvents) {
+  const topicWords = significantWords(topic);
+  const eventWords = significantWords(keyEvents.join(' '));
+  if (!topicWords.size || !eventWords.size) return 0;
+  let shared = 0;
+  for (const w of eventWords) if (topicWords.has(w)) shared++;
+  return shared / eventWords.size;               // kitna hissa keyEvents ka asal topic se aaya
+}
+
 // dialogue % naapo (quotes ke andar wale lafz / kul lafz) — sirf visibility ke liye
 function dialoguePct(text) {
   const quoted = (String(text).match(/["“][^"”]{2,}["”]/g) || []).join(' ');
@@ -292,40 +314,74 @@ module.exports = async function (spec, cfg, st) {
   const avoidNames = usedCastNames(id);
   if (avoidNames.length) U.log(`   pichli videos ke naam (avoid honge): ${avoidNames.join(', ')}`);
 
-  // ---------- PASS 1: outline + cast (STRICTLY is topic se, generic nahi) ----------
-  const outlineResp = await AI.chatJson(model,
+  // ---------- PASS 0: keyEvents EXTRACTION (2026-08-18) ----------
+  // ASLI MASLA: jab ek hi call se "keyEvents nikaalo AUR dramatic outline
+  // likho" dono maang liye jate, model outline-writing mindset mein apne
+  // genre-trope (scheme/dark magic/assassination/coup) khud bana leta —
+  // chahe TOPIC mein wo bilkul na ho (verified: 6 consecutive tries, har
+  // dafa alag stock political-intrigue plot, fidelity 0-17%). Fix: keyEvents
+  // ab ek ALAG, TANG (narrow), kam-temperature call se aate hain jiska SIRF
+  // kaam TOPIC ke jumlon ko paraphrase/quote karna hai — koi dramatic
+  // structure sochna iska kaam nahi, is liye invent karne ka mauqa kam hai.
+  const FIDELITY_MIN = 0.3;
+  const MAX_KE_TRIES = 4;
+  let keyEvents = [], fidelity = 0;
+  for (let attempt = 1; attempt <= MAX_KE_TRIES; attempt++) {
+    const keResp = await AI.chatJson(model,
+`Neeche ek werewolf/Alpha-King paranormal romance TOPIC diya gaya hai.
+Tumhara SIRF ye kaam hai: TOPIC ke apne alfaaz mein se 4-6 KHAAS, THOS PLOT
+EVENTS nikaalo (copy ya close-paraphrase karo). KUCH BHI NAYA MAT BANAO —
+koi scheme, dark magic, assassination, poison, spy, coup, war, jo TOPIC mein
+LIKHA HI NAHI, bilkul mat jorho, chahe wo is genre mein "aam" trope ho. Sirf
+jo TOPIC khud batata hai wahi likho — apni taraf se kahani mat likho.
+${attempt > 1 ? `\nPICHLI KOSHISH mein tumne TOPIC mein na likhi hui cheezein (apna scheme/magic/plot) khud bana li thin — is dafa SIRF TOPIC ke jumlon se seedha events uthao, ek bhi naya lafz apni taraf se mat jorho.\n` : ''}
+TOPIC:
+${topic}
+
+Jawab: {"keyEvents": ["...", "...", "...", "...", "..."]} — English mein.`,
+      { maxTokens: 700, temperature: 0.2 });
+    // len >=6 words filter — chhote fragments (misal "secretly", "three
+    // years") literal substring hone ki wajah se fidelity check ko trivially
+    // pass kar sakte hain lekin asal maloomat nahi rakhte (2026-08-18 mein
+    // aisa hi hua — ek "100% fidelity" outline bilkul alag kahani ban gayi
+    // kyunke keyEvents khaali fragments the).
+    keyEvents = (Array.isArray(keResp?.keyEvents) ? keResp.keyEvents.filter(Boolean) : [])
+      .filter(k => countWords(k) >= 6);
+    fidelity = keyEvents.length ? topicFidelityScore(topic, keyEvents) : 0;
+    if (fidelity >= FIDELITY_MIN && keyEvents.length >= 3) break;
+    U.warn(`keyEvents TOPIC SE HAT GAYE ya bahut chhote hain (fidelity ${Math.round(fidelity * 100)}%, ${keyEvents.length} usable events, chahiye >=${Math.round(FIDELITY_MIN * 100)}% aur >=3) — ${keyEvents.join(' | ')} — dobara koshish (${attempt}/${MAX_KE_TRIES})`);
+    if (attempt === MAX_KE_TRIES) throw new Error(`keyEvents ${MAX_KE_TRIES} koshishon ke baad bhi topic se hat rahe hain (fidelity ${Math.round(fidelity * 100)}%) — asal topic: "${topic.slice(0, 120)}..." vs keyEvents: ${keyEvents.join(' | ')}`);
+  }
+  U.ok(`key events (topic se, fidelity ${Math.round(fidelity * 100)}%): ${keyEvents.join(' | ')}`);
+
+  // ---------- PASS 1: outline + cast (keyEvents FIXED hain, sirf arrange karna hai) ----------
+  const MAX_OUTLINE_TRIES = 3;
+  let outlineResp, list, cast;
+  for (let attempt = 1; attempt <= MAX_OUTLINE_TRIES; attempt++) {
+    outlineResp = await AI.chatJson(model,
 `Werewolf/Alpha-King paranormal romance audiobook ke liye ${beats} BEATS ka
 outline banao. Ye FICTION hai — asli waqiya nahi, kahani ban rahi hai.
 
-TOPIC / PREMISE (POORI OUTLINE ISI SE BANEGI — GHAUR SE PARHO):
+TOPIC / PREMISE (background samajhne ke liye):
 ${topic}
 
-BAHUT AHEM — TOPIC FIDELITY (pichli dafa ye fail hua tha — ghaur se parho):
-Pehle, TOPIC ke upar diye jumlon mein se 3-5 KHAAS, THOS PLOT EVENTS nikaalo
-(misal: "she poses as his fake fiancée," "an engagement ball," "an
-assassination attempt," "she saves his life") — inhe "keyEvents" mein likho.
-Phir HAR ek keyEvent ko EK KHAAS BEAT mein zaroor daalo — koi bhi keyEvent
-chhootna nahi chahiye, AUR koi bhi keyEvent DO beats ko mat do (har event
-sirf EK beat mein hota hai, dobara kisi aur beat mein nahi). Agar topic
-"engagement ball" aur "assassination
-attempt" bolta hai, to kahani mein WAHI engagement ball scene aur WAHI
-assassination attempt hona ZAROORI hai — koi generic "mate-bond pulls him to
-a stranger" jaisa alag/default plot mat likho. Har beat is topic ke seedha
-andar se aana chahiye — heroine kaun hai, uska kaam/haalat kya hai, Alpha
-King se uska taluq kaisa shuru hota hai, kya khatra/scheme hai — SAB isi
-topic se aayega, GENERIC TROPE se nahi.
+YE HAIN IS KAHANI KE FIXED, MANDATORY PLOT EVENTS (in mein koi tabdeeli,
+izafa (naya bada plot-turn), ya kami MAT karo — sirf inhe beats mein
+tarteeb se phaila do):
+${keyEvents.map((k, i) => `${i + 1}. ${k}`).join('\n')}
 
-Neeche diya "SHAPE" sirf structure batata hai (kahani kis tarah aage badhti
-hai) — ye maloomat NAHI deta ke kya HOTA hai, wo sirf topic/keyEvents se
-aata hai.
+Har upar wale event ko EK khaas beat mein daalo (kisi bhi event ko do beats
+mat do, kisi ko chhodo mat). In events ke ILAAWA sirf UTNI hi maloomat khud
+se socho jitni beats ko aapas mein jodne/behte rakhne ke liye chahiye
+(transitions, chhoti connecting scenes, dialogue) — koi NAYA bada plot-turn
+(scheme, dark magic, war, spy, coup, assassination) khud se MAT jorho jab
+tak upar ke events mein se na ho.
 
 SHAPE (structure, maloomat nahi):
-setup → inciting incident (topic ke mutabiq) → Alpha King ke sath forced
-proximity → escalating danger/tension (topic ke mutabiq) → claiming/bonding
-scene → crisis/near-loss (topic ke mutabiq — agar topic mein ek khaas khatra
-diya hai jaise "assassination attempt at an engagement ball," to WAHI khatra
-istemal karo) → resolution (villain qanooni/samaji tareeqe se saza pata hai)
-→ natural anjaam (seasons-passed time-skip, symbolic callback).
+setup → inciting incident → Alpha King ke sath forced proximity → escalating
+tension → claiming/bonding scene → crisis/near-loss (upar diye events mein
+se hi) → resolution (villain qanooni/samaji tareeqe se saza pata hai) →
+natural anjaam (seasons-passed time-skip, symbolic callback).
 
 Qaide:
 - beat 1 = HOOK (kahani ki dramatized shuruaat): seedha in-media-res
@@ -354,18 +410,23 @@ se ALAG aur ASLI (original) hona chahiye: ${avoidNames.join(', ')}.` : ''}
 {"heroine":"naam","alphaKing":"naam","antagonist":"naam ya khaali agar is topic mein koi khaas villain na ho"}
 
 Jawab is shape mein do:
-{"keyEvents": ["...", "...", "..."], "cast": {"heroine":"...","alphaKing":"...","antagonist":"..."}, "beats": [ ... ${beats} beats ... ]}
+{"cast": {"heroine":"...","alphaKing":"...","antagonist":"..."}, "beats": [ ... ${beats} beats ... ]}
 
 title, covers, cast ke naam ANGREZI (ENGLISH) mein likho.
 BAHUT AHEM: jawab sirf ENGLISH mein. Hindi/Urdu script (Devanagari) BILKUL nahi.`,
-    { maxTokens: 4800, temperature: 0.85 });
+    { maxTokens: 4800, temperature: attempt === 1 ? 0.85 : 0.6 });
 
-  const list = (Array.isArray(outlineResp?.beats) ? outlineResp.beats : Array.isArray(outlineResp) ? outlineResp : [])
-    .filter(b => b && (b.covers || b.title));
-  if (list.length < 3) throw new Error(`outline mein sirf ${list.length} beats aaye`);
-  const cast = outlineResp?.cast && outlineResp.cast.heroine && outlineResp.cast.alphaKing ? outlineResp.cast : null;
+    list = (Array.isArray(outlineResp?.beats) ? outlineResp.beats : Array.isArray(outlineResp) ? outlineResp : [])
+      .filter(b => b && (b.covers || b.title));
+    if (list.length < 3) {
+      U.warn(`outline mein sirf ${list.length} beats aaye (koshish ${attempt}/${MAX_OUTLINE_TRIES})`);
+      if (attempt === MAX_OUTLINE_TRIES) throw new Error(`outline ${MAX_OUTLINE_TRIES} koshishon ke baad bhi sirf ${list.length} beats de raha hai`);
+      continue;
+    }
+    cast = outlineResp?.cast && outlineResp.cast.heroine && outlineResp.cast.alphaKing ? outlineResp.cast : null;
+    break;
+  }
   if (cast) st.meta.cast = cast;
-  const keyEvents = Array.isArray(outlineResp?.keyEvents) ? outlineResp.keyEvents.filter(Boolean) : [];
 
   // ASLI BUG (video 3): model kabhi EK hi keyEvent DO beats ko de deta tha
   // (misal "assassination attempt" beat 10 AUR beat 11 dono ko) — dono beats
