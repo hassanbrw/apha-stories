@@ -117,7 +117,18 @@ const arg = (name, def = null) => {
     R2.download(id, 'final.mp4', wd);
     R2.download(id, 'voice', U.p(id, 'voice'));
     R2.download(id, 'captions', U.p(id, 'captions'));
-    U.ok(`final.mp4 mil gayi: work/${id}/final.mp4`);
+    // ASLI BUG (2026-08-17): pehle ye line unconditionally "✓ mil gayi" print
+    // karti thi chahe download kuch laaya ho ya nahi (rclone copy ek missing
+    // remote file par chup-chaap kuch nahi karta, error nahi deta) — pod ka
+    // render crash ho gaya tha (concat ke baad, particles/captions ya final
+    // mux mein) lekin waitUntilExited sirf "exited" status dekhta hai, exit
+    // CODE nahi — is liye poora flow "success" dikha, jab k final.mp4 kabhi
+    // bana hi nahi. Ab download ke baad file ka wajood + size khud check.
+    const finalPath = path.join(wd, 'final.mp4');
+    if (!fs.existsSync(finalPath) || fs.statSync(finalPath).size < 1024) {
+      throw new Error(`final.mp4 download ke baad bhi nahi mila (ya khaali hai) — pod ka render crash hua hoga, R2 par kabhi upload hi nahi hui. Video ID: ${id}`);
+    }
+    U.ok(`final.mp4 mil gayi: work/${id}/final.mp4 (${(fs.statSync(finalPath).size / 1048576).toFixed(1)} MB)`);
   } finally {
     U.log(`\n== instance DELETE kar raha hun (paisa bachane ke liye — sirf stop nahi) ==`);
     await destroyFn().catch(err => U.warn(`delete fail: ${err.message} — dashboard se khud check kar lo`));
