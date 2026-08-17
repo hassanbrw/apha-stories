@@ -13,7 +13,8 @@
 //  Avatar ki apni awaaz MUTE — awaaz sirf ek master voiceover.mp3 se aati hai,
 //  is liye lip-sync kabhi nahi phisalta.
 // ============================================================
-const { execFileSync, execSync } = require('child_process');
+const { execFileSync, execSync, execFile } = require('child_process');
+const { promisify } = require('util');
 const os = require('os');
 const fs = require('fs'), path = require('path');
 const U = require('../lib/util.js');
@@ -23,10 +24,22 @@ const W = 1920, H = 1080;
 // ek sath kitne slot clips — pehle hardcoded 3 tha aur config.json ka
 // concurrency.render (jo isi maqsad ke liye tha) kabhi padha hi nahi jata
 // tha. Ab config se aata hai (env var RENDER_CONC still override kar sakta
-// hai). Test se pata chala: 1-at-a-time = 30s/clip, 6-at-once = 8.5s/clip
-// wall-equivalent (~3.5x tez) — is machine ke 12 cores par 6 achi value hai.
+// hai).
 const ENV_RENDER_CONC = +(process.env.RENDER_CONC || 0);
-const ff = (args, to = 900000) => execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', ...args], { timeout: to, maxBuffer: 1 << 26 });
+// ASLI BUG (2026-08-17, render kabhi khatam hi nahi hua — 90 min timeout):
+// ye pehle execFileSync tha, jo Node ke poore single-threaded event loop ko
+// BLOCK karta hai jab tak ffmpeg khatam na ho. "CONC ek sath" workers
+// (Promise.all + async loop) mein koi bhi await point nahi tha is blocking
+// call ke ilawa — is liye pehla worker akela hi PURI queue chaba jata tha
+// (uska async function kabhi yield hi nahi karta tha), baaki CONC-1 workers
+// ko kaam milta hi nahi tha jab tak pehla poora khatam na ho. Matlab CONC
+// jo bhi ho (6 ho ya 128), asal mein hamesha 1 hi tha — sab render hamesha
+// sequential rahe (isi wajah se aaj raat 183 slots 90 min mein khatam nahi
+// huay). Fix: execFile (async, promisified) — ab har await asli OS process
+// ko chalne deta hai bina Node ka event loop roke, is liye CONC workers
+// GENUINELY parallel chalte hain.
+const execFileP = promisify(execFile);
+const ff = (args, to = 900000) => execFileP('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', ...args], { timeout: to, maxBuffer: 1 << 26 });
 
 // Is machine mein Intel Quick Sync (iGPU hardware encoder) hai — CPU x264 se
 // tez, aur AHEM: CPU cores khaali chhod deta hai jo isi waqt parallel clip-
@@ -89,7 +102,7 @@ function nearestImage(dirs, tSec) {
 const tagOf = s => `${String(Math.floor(s.start)).padStart(5, '0')}_${String(Math.floor(s.end)).padStart(5, '0')}`;
 
 // ---------- ek slot ka clip ----------
-function buildSlot(s, i, dirs, cfg, tmp, avatarPool, jobThreads = 0) {
+async function buildSlot(s, i, dirs, cfg, tmp, avatarPool, jobThreads = 0) {
   const fps = cfg.canvas.fps, dur = Math.max(0.5, s.dur);
   const out = path.join(tmp, `s${String(i).padStart(4, '0')}.mp4`);
   if (fs.existsSync(out)) return out;
@@ -128,7 +141,7 @@ function buildSlot(s, i, dirs, cfg, tmp, avatarPool, jobThreads = 0) {
     if (every > 0 && s.sbsWith) {
       const gap = cfg.sideBySide.gapPx ?? 8;
       const half = Math.round((W - gap) / 2 / 2) * 2;
-      ff(['-loop', '1', '-i', img, '-loop', '1', '-i', s.sbsWith,
+      await ff(['-loop', '1', '-i', img, '-loop', '1', '-i', s.sbsWith,
           '-filter_complex',
           `color=black:s=${W}x${H}:r=${fps}[bg];` +
           `[0:v]scale=${half}:${H}:force_original_aspect_ratio=increase,crop=${half}:${H}[L];` +
@@ -144,7 +157,7 @@ function buildSlot(s, i, dirs, cfg, tmp, avatarPool, jobThreads = 0) {
     // ho to bilkul static.
     const z = cfg.render.zoom || 0;
     if (z <= 0.001) {
-      ff(['-loop', '1', '-i', img,
+      await ff(['-loop', '1', '-i', img,
           '-vf', `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},setsar=1`,
           '-frames:v', String(n), ...enc, out]);
       return withAudio(out);
@@ -162,7 +175,7 @@ function buildSlot(s, i, dirs, cfg, tmp, avatarPool, jobThreads = 0) {
     else if (mode === 1) { zexpr = `${base}-${z}*on/${n}`; xexpr = `iw/2-(iw/zoom/2)`; yexpr = `ih/2-(ih/zoom/2)`; }
     else if (mode === 2) { zexpr = `${base}`;              xexpr = `(iw-iw/zoom)*(1-on/${n})`; yexpr = `ih/2-(ih/zoom/2)`; }  // pan left
     else                 { zexpr = `${base}`;              xexpr = `(iw-iw/zoom)*(on/${n})`;   yexpr = `ih/2-(ih/zoom/2)`; }  // pan right
-    ff(['-loop', '1', '-i', img,
+    await ff(['-loop', '1', '-i', img,
         '-vf', `scale=${CW}:${CH}:force_original_aspect_ratio=increase,crop=${CW}:${CH},` +
                `zoompan=z='${zexpr}':x='${xexpr}':y='${yexpr}':d=${n}:s=${CW}x${CH}:fps=${fps},` +
                `scale=${W}:${H}:flags=lanczos,setsar=1`,
@@ -178,7 +191,7 @@ function buildSlot(s, i, dirs, cfg, tmp, avatarPool, jobThreads = 0) {
     // chhota reh jata tha aur sab aage ke shots pehle aa jate the — poori
     // video ki sync 18 second khisak gayi thi. tpad aakhri frame ko rok kar
     // slot ki poori lambai bhar deta hai.
-    ff(['-i', v,
+    await ff(['-i', v,
         '-vf', `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},fps=${fps},` +
                `tpad=stop_mode=clone:stop_duration=${dur.toFixed(3)},setsar=1`,
         '-t', dur.toFixed(3), ...enc, out]);
@@ -190,7 +203,7 @@ function buildSlot(s, i, dirs, cfg, tmp, avatarPool, jobThreads = 0) {
   if (!av) return null;
   const side = avatarPool.next();           // true = right-side layout
   if (!side) {
-    ff(['-i', av,
+    await ff(['-i', av,
         '-vf', `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},fps=${fps},setsar=1`,
         '-t', dur.toFixed(3), ...enc, out]);
   } else {
@@ -198,7 +211,7 @@ function buildSlot(s, i, dirs, cfg, tmp, avatarPool, jobThreads = 0) {
     const sp = cfg.avatarLayout.sideSplit || { image: 70, avatar: 30 };
     const aw = Math.round(W * sp.avatar / 100 / 2) * 2, ah = H;
     const iw = W - aw;
-    ff(['-loop', '1', '-t', dur.toFixed(3), '-i', bg, '-i', av,
+    await ff(['-loop', '1', '-t', dur.toFixed(3), '-i', bg, '-i', av,
         '-filter_complex',
         `[0:v]scale=${iw}:${ah}:force_original_aspect_ratio=increase,crop=${iw}:${ah},fps=${fps}[L];` +
         `[1:v]scale=${aw}:${ah}:force_original_aspect_ratio=increase,crop=${aw}:${ah},fps=${fps}[R];` +
@@ -288,7 +301,7 @@ module.exports = async function (spec, cfg, st) {
       const i = cursor++;
       const s = timeline[i];
       let f = null;
-      try { f = buildSlot(s, i, dirs, cfg, tmp, poolFor(s), jobThreads); }
+      try { f = await buildSlot(s, i, dirs, cfg, tmp, poolFor(s), jobThreads); }
       catch (e) { U.warn(`slot ${i} (${s.kind}) fail: ${String(e.message).slice(0, 70)}`); }
       if (!f) {
         miss[s.kind]++;
@@ -299,7 +312,7 @@ module.exports = async function (spec, cfg, st) {
           const made = [];
           for (let k = 0; k < subs.length; k++) {
             try {
-              const one = buildSlot({ ...s, kind: 'image', start: subs[k].start, end: subs[k].end, dur: subs[k].dur },
+              const one = await buildSlot({ ...s, kind: 'image', start: subs[k].start, end: subs[k].end, dur: subs[k].dur },
                                     `${i}_${k}`, dirs, cfg, tmp, poolFor(s), jobThreads);
               if (one) made.push(one);
             } catch {}
@@ -307,7 +320,7 @@ module.exports = async function (spec, cfg, st) {
           if (made.length) { parts[i] = made; if (++finished % 25 === 0) U.log(`   ...${finished}/${timeline.length}`); continue; }
         }
         // missing stock/image → us WAQT ke qareeb wali image (pehli nahi = repeat nahi)
-        try { f = buildSlot({ ...s, kind: 'image', _forceImg: nearestImage(dirs, s.start) }, i, dirs, cfg, tmp, poolFor(s), jobThreads); } catch {}
+        try { f = await buildSlot({ ...s, kind: 'image', _forceImg: nearestImage(dirs, s.start) }, i, dirs, cfg, tmp, poolFor(s), jobThreads); } catch {}
       }
       parts[i] = f;
       if (++finished % 25 === 0) U.log(`   ...${finished}/${timeline.length}`);
@@ -333,7 +346,7 @@ module.exports = async function (spec, cfg, st) {
   fs.writeFileSync(listF, clips.map(p => `file '${path.resolve(p).replace(/'/g, "'\\''")}'`).join('\n') + '\n');
   const silent = path.join(tmp, 'video_silent.mp4');
   U.log('   concat (video-only)...');
-  ff(['-f', 'concat', '-safe', '0', '-i', listF, '-c', 'copy', silent], 1800000);
+  await ff(['-f', 'concat', '-safe', '0', '-i', listF, '-c', 'copy', silent], 1800000);
 
   // ---------- particles + captions EK HI PASS mein (pehle 2 alag re-encode the) ----------
   // ASLI OPTIMIZATION: particles aur captions har video par DO poore-frame
@@ -405,7 +418,7 @@ module.exports = async function (spec, cfg, st) {
     // (pixel-level blend, encoder se pehle) ek 60min video ke liye 30 min se
     // zyada le sakta hai (naapa gaya: 27+ min par abhi bhi chal raha tha jab
     // timeout lag gaya). 90 min budget de diya.
-    ff([...inputs, '-filter_complex', filterParts.join(';'), '-map', '[vout]',
+    await ff([...inputs, '-filter_complex', filterParts.join(';'), '-map', '[vout]',
         ...videoEnc(cfg.canvas.fps, 20), merged], 5400000);
     intermediates.push(merged);
     current = merged;
@@ -415,7 +428,7 @@ module.exports = async function (spec, cfg, st) {
   const final = U.p(id, 'final.mp4');
   U.log('   ek continuous voiceover (ai33) mux — koi glitch nahi, lip-sync barqarar');
   // -shortest se truncation ka khatra nahi: video aur audio dono ~barabar
-  ff(['-i', current, '-i', vo,
+  await ff(['-i', current, '-i', vo,
       '-map', '0:v:0', '-map', '1:a:0',
       '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-shortest',
       '-movflags', '+faststart', final], 1800000);
