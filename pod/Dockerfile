@@ -40,18 +40,29 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# ---------- ffmpeg with NVENC: TEMPORARILY DISABLED for diagnosis ----------
-# (2026-08-17) Three consecutive build failures at ~80-90s, right around
-# where GitHub's own status page currently shows "~50% error rate on
-# archive/raw-content downloads" (active incident, 16:16 UTC). Removing
-# this block to test in isolation whether it's specifically this heavy
-# download step or a broader issue — re-add once isolated.
-# RUN curl -fsSL -o /tmp/ffmpeg.tar.xz \
-#       https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz \
-#     && mkdir -p /tmp/ffmpeg-extract && tar -xf /tmp/ffmpeg.tar.xz -C /tmp/ffmpeg-extract --strip-components=1 \
-#     && cp /tmp/ffmpeg-extract/bin/ffmpeg /tmp/ffmpeg-extract/bin/ffprobe /usr/local/bin/ \
-#     && rm -rf /tmp/ffmpeg.tar.xz /tmp/ffmpeg-extract \
-#     && ffmpeg -version
+# ---------- ffmpeg with NVENC (2026-08-17, speed optimization) ----------
+# Ubuntu apt ka ffmpeg libass ke saath aata hai (subtitle burn-in ke liye
+# kaafi tha) lekin NVENC (NVIDIA ka hardware encoder) NAHI — Debian/Ubuntu
+# is niyat se exclude karte hain (NVIDIA Video Codec SDK proprietary hai,
+# distro licensing ise apne official build mein shamil nahi karti). Is pod
+# ke GPU (RTX 4090/5090) ka ab tak render mein koi istemal nahi ho raha
+# tha (sirf CPU libx264) — BtbN ka static build (widely-used, GPL, NVENC +
+# libass + libx264 sab shamil) apt ffmpeg ki jagah /usr/local/bin mein
+# rakh diya (PATH mein /usr/bin se pehle aata hai).
+#
+# ISOLATED via 3 fail / 1 pass A-B test (2026-08-17): ye block download URL
+# GitHub ke apne release-assets CDN (release-assets.githubusercontent.com)
+# se hoti hai — GitHub ka status page us waqt EXACT isi cheez ("archive/raw-
+# content downloads ~50% error rate") ka active incident dikha raha tha.
+# --retry curl ko is tarah ki transient download flakiness (chahe GitHub
+# ka apna incident ho ya normal network blip) khud jhelnay deta hai bina
+# poore build ko fail kiye.
+RUN curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o /tmp/ffmpeg.tar.xz \
+      https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz \
+    && mkdir -p /tmp/ffmpeg-extract && tar -xf /tmp/ffmpeg.tar.xz -C /tmp/ffmpeg-extract --strip-components=1 \
+    && cp /tmp/ffmpeg-extract/bin/ffmpeg /tmp/ffmpeg-extract/bin/ffprobe /usr/local/bin/ \
+    && rm -rf /tmp/ffmpeg.tar.xz /tmp/ffmpeg-extract \
+    && ffmpeg -version
 
 # rclone (R2 sync — S3-compatible)
 RUN curl https://rclone.org/install.sh | bash
