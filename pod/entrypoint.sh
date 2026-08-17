@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-#  POD ENTRYPOINT — R2 se download, voice+render, R2 par upload
+#  POD ENTRYPOINT -- R2 se download, voice+render, R2 par upload
 #
 #  Zaroori env vars (pod launch ke waqt RunPod secrets se aate hain):
 #    VIDEO_ID              — konsa video (work/<id>/ folder ka naam)
