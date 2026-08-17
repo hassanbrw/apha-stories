@@ -14,6 +14,7 @@
 //  is liye lip-sync kabhi nahi phisalta.
 // ============================================================
 const { execFileSync, execSync } = require('child_process');
+const os = require('os');
 const fs = require('fs'), path = require('path');
 const U = require('../lib/util.js');
 const { subSlots } = require('../lib/subslots.js');
@@ -42,10 +43,27 @@ let _qsv = null;
 function useQSV() { if (_qsv === null) _qsv = detectQSV(); return _qsv; }
 // crf (CPU) aur global_quality (QSV) ek jaisa scale nahi hain, lekin dono
 // "kam = behtar quality" hain is liye seedha number pass karna theek hai.
-function videoEnc(fps, crf) {
+// threads=0 matlab ffmpeg apna default (saare visible cores) istemal karega —
+// akela/aakhri encode (jaise final concat mux) ke liye theek hai. Per-slot
+// PARALLEL encode ke liye (CONC clips ek sath) explicit cap zaroori hai —
+// warna har ek process khud saare pod cores maangta hai (Kokoro workers wali
+// wahi thread-oversubscription ghalti, 2026-08-17 ka fix dekho), jitne bhi
+// concurrent clips hon sab aapas mein thread ke liye larte reh jate hain.
+function videoEnc(fps, crf, threads = 0) {
+  const t = threads > 0 ? ['-threads', String(threads)] : [];
   return useQSV()
-    ? ['-c:v', 'h264_qsv', '-preset', 'fast', '-global_quality', String(crf), '-pix_fmt', 'nv12', '-r', String(fps)]
-    : ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', String(crf), '-pix_fmt', 'yuv420p', '-r', String(fps)];
+    ? ['-c:v', 'h264_qsv', '-preset', 'fast', '-global_quality', String(crf), '-pix_fmt', 'nv12', '-r', String(fps), ...t]
+    : ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', String(crf), '-pix_fmt', 'yuv420p', '-r', String(fps), ...t];
+}
+
+// PARALLELISM processes ki tadaad se aata hai (CONC), har process ke andar
+// bahut zyada threading se nahi — CONC jitna bara ho, har ek process utna hi
+// kam thread mange (min 1). Local 12-core machine par CONC=6 pehle se test
+// ho chuka (auto-threads ke sath 3.5x speedup) — pod ke bare core count par
+// bina cap ke har process pura pod maangta to hai, is liye yahan explicit.
+function threadsPerJob(conc) {
+  const cores = os.cpus().length || conc;
+  return Math.max(1, Math.floor(cores / Math.max(1, conc)));
 }
 
 function pick(dir, tag) {
@@ -71,7 +89,7 @@ function nearestImage(dirs, tSec) {
 const tagOf = s => `${String(Math.floor(s.start)).padStart(5, '0')}_${String(Math.floor(s.end)).padStart(5, '0')}`;
 
 // ---------- ek slot ka clip ----------
-function buildSlot(s, i, dirs, cfg, tmp, avatarPool) {
+function buildSlot(s, i, dirs, cfg, tmp, avatarPool, jobThreads = 0) {
   const fps = cfg.canvas.fps, dur = Math.max(0.5, s.dur);
   const out = path.join(tmp, `s${String(i).padStart(4, '0')}.mp4`);
   if (fs.existsSync(out)) return out;
@@ -83,7 +101,7 @@ function buildSlot(s, i, dirs, cfg, tmp, avatarPool) {
   // veryfast/crf21 wahi dikhta hai lekin ~15 guna chhota. Captions band hain,
   // is liye aakhri mux mein video dobara encode nahi hota — yehi clips
   // seedha final.mp4 bante hain, koi quality nuqsan nahi.
-  const enc = [...videoEnc(fps, 21), '-an'];
+  const enc = [...videoEnc(fps, 21, jobThreads), '-an'];
   // Har clip ki apni sahi awaaz us par mux karne ka helper. LIP-SYNC FIX:
   // pehle sab avatar clips mute the aur upar ek master voiceover chalta tha —
   // HeyGen Avatar III ki apni chhoti latency master se match nahi karti thi,
@@ -260,7 +278,8 @@ module.exports = async function (spec, cfg, st) {
     if (pairs) U.log(`   ${pairs} jagah 2 images side by side`);
   }
 
-  U.log(`   ${timeline.length} slots → clips banate hain (${CONC} ek sath)`);
+  const jobThreads = threadsPerJob(CONC);
+  U.log(`   ${timeline.length} slots → clips banate hain (${CONC} ek sath, ${jobThreads} thread/clip)`);
   const parts = new Array(timeline.length).fill(null);
   const miss = { image: 0, stock: 0, avatar: 0 };
   let cursor = 0, finished = 0;
@@ -269,7 +288,7 @@ module.exports = async function (spec, cfg, st) {
       const i = cursor++;
       const s = timeline[i];
       let f = null;
-      try { f = buildSlot(s, i, dirs, cfg, tmp, poolFor(s)); }
+      try { f = buildSlot(s, i, dirs, cfg, tmp, poolFor(s), jobThreads); }
       catch (e) { U.warn(`slot ${i} (${s.kind}) fail: ${String(e.message).slice(0, 70)}`); }
       if (!f) {
         miss[s.kind]++;
@@ -281,14 +300,14 @@ module.exports = async function (spec, cfg, st) {
           for (let k = 0; k < subs.length; k++) {
             try {
               const one = buildSlot({ ...s, kind: 'image', start: subs[k].start, end: subs[k].end, dur: subs[k].dur },
-                                    `${i}_${k}`, dirs, cfg, tmp, poolFor(s));
+                                    `${i}_${k}`, dirs, cfg, tmp, poolFor(s), jobThreads);
               if (one) made.push(one);
             } catch {}
           }
           if (made.length) { parts[i] = made; if (++finished % 25 === 0) U.log(`   ...${finished}/${timeline.length}`); continue; }
         }
         // missing stock/image → us WAQT ke qareeb wali image (pehli nahi = repeat nahi)
-        try { f = buildSlot({ ...s, kind: 'image', _forceImg: nearestImage(dirs, s.start) }, i, dirs, cfg, tmp, poolFor(s)); } catch {}
+        try { f = buildSlot({ ...s, kind: 'image', _forceImg: nearestImage(dirs, s.start) }, i, dirs, cfg, tmp, poolFor(s), jobThreads); } catch {}
       }
       parts[i] = f;
       if (++finished % 25 === 0) U.log(`   ...${finished}/${timeline.length}`);

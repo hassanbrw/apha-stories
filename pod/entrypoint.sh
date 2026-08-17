@@ -93,10 +93,14 @@ echo "== RENDER (ffmpeg clips + overlay + mux) =="
 cd /app
 # config.json ka concurrency.render local machine (12 cores) ke liye tuned hai
 # (=6) — pod par jitne bhi cores rent hue hain unka use karo, warna zyadatar
-# rented cores render ke waqt khaali baithe rahenge. 32 par cap kiya hai
-# (diminishing returns aur ffmpeg process-spawn overhead se bachne ke liye).
+# rented cores render ke waqt khaali baithe rahenge. Pehle 32 par cap tha
+# (bina real pod test ke, sirf andaza — 384-core pod par isse zyadatar cores
+# khaali reh jate). 2026-08-17: stages/9-render.js ab har parallel ffmpeg clip
+# ko explicit -threads deta hai (CONC ke hisaab se, Kokoro workers wale
+# thread-oversubscription fix jaisa) — is liye CONC ab bare core count par
+# bhi cores ke aapas mein larne ka khatra nahi, cap 128 tak bara diya.
 PODCORES=$(nproc)
-export RENDER_CONC=$(( PODCORES < 32 ? PODCORES : 32 ))
+export RENDER_CONC=$(( PODCORES < 128 ? PODCORES : 128 ))
 echo "   RENDER_CONC=${RENDER_CONC} (pod cores: ${PODCORES})"
 node run.js --video="${VIDEO_ID}" --only=render
 
