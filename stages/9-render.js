@@ -219,7 +219,14 @@ module.exports = async function (spec, cfg, st) {
   // avatar layout: aadhe full-screen, aadhe side (config se)
   // aadhe avatar shots full-screen, aadhe right-side 70/30 — bari bari,
   // taake poori video mein ek hi tarah ka talking head na rahe.
-  const shareFull = cfg.avatarLayout.fullScreenShare ?? 0.5;
+  // ASLI BUG (2026-08-17): ye line har render mein chalti hai (avatar ho ya
+  // na ho — line 228 ka .forEach hi avatar-specific hai), lekin
+  // config.json se avatarLayout hata diya gaya tha (werewolf-alpha-romance
+  // mein avatar kabhi hota hi nahi) — "Cannot read properties of undefined"
+  // se render har baar crash + pod restart-loop mein phans gaya. Optional
+  // chaining se safe kar diya (avatar is niche mein kabhi bane ga hi nahi,
+  // is liye fallback value ka koi asar nahi padta).
+  const shareFull = cfg.avatarLayout?.fullScreenShare ?? 0.5;
   let k = -1;
   const avatarPool = { next: () => { k++; return shareFull >= 1 ? false : (k % 2 === 1); } };
 
