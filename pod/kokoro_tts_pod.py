@@ -31,6 +31,19 @@ _pipeline = None  # har worker process mein EK dafa load hota hai (initializer)
 
 def _init_worker(voice_hint):
     global _pipeline
+    # ASLI BUG (2026-08-17, doosri stuck-instance): PyTorch default mein HAR
+    # process apne tensor ops ke liye SAARE visible cores istemal karne ki
+    # koshish karta hai. 200+ worker processes, har ek 384 cores maang raha
+    # ho — massive oversubscription/thrashing, kisi ko bhi asli CPU time nahi
+    # milta (confirmed: cpu_util 0% jab kuch bhi 38 min tak generate nahi
+    # hua). Fix: har worker apne aap ko SIRF 1 thread tak mehdood kare —
+    # PARALLELISM processes ki tadaad se aata hai, har process ke andar
+    # multi-threading se nahi.
+    import os
+    os.environ['OMP_NUM_THREADS'] = '1'
+    os.environ['MKL_NUM_THREADS'] = '1'
+    import torch
+    torch.set_num_threads(1)
     from kokoro import KPipeline
     _pipeline = KPipeline(lang_code='a')
 
