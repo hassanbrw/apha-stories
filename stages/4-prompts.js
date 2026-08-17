@@ -72,15 +72,19 @@ ${sample}`, { maxTokens: 500, temperature: 0.4 }).catch(() => []);
     if (characters.length) U.log(`   character sheet (age+appearance, jabri har prompt mein lagega):\n   ${sheetText.split('\n').map(l => '   ' + l).join('\n')}`);
     else U.warn('character sheet nahi bana — prompts descriptions apne aap se banayenge (thora kam consistent)');
 
-    // narration ya prompt mein kirdaar ka naam mile aur uska appearance
-    // snippet abhi tak prompt mein na ho — to age+appearance JABRI daal do
+    // ASLI BUG (2026-08-17, user ki shikayat "characters kharab ho rahe"):
+    // pehle sirf UN characters ki appearance jabri daali jati thi jinka NAAM
+    // literally us slot ki narration mein likha ho — lekin ziyada tar
+    // narration pronouns use karta hai ("she", "his eyes") naam ke bajaye,
+    // is liye AKSAR koi bhi character detail inject hi nahi hoti thi (naam
+    // match hi nahi karta). User ka saaf hukum: HAR prompt mein HAR
+    // character ki appearance ho — ab conditional check hata diya, sab
+    // characters HAMESHA har prompt mein jate hain (chahe wo is exact slot
+    // ki narration mein naam se mention huye hon ya sirf pronoun se).
     const descOf = c => `${c.name}${c.age ? `, age ${c.age}` : ''}: ${c.appearance}`;
     function ensureCharacterDetails(prompt, narrationText) {
       let out = prompt;
       for (const c of characters) {
-        const esc = c.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const nameRe = new RegExp(`\\b${esc}\\b`, 'i');
-        if (!nameRe.test(narrationText) && !nameRe.test(out)) continue;
         const snippet = c.appearance.slice(0, 24).toLowerCase();
         if (out.toLowerCase().includes(snippet)) continue;   // already has real detail
         out = out.replace(/,?\s*no text\s*$/i, '') + `, ${descOf(c)}, no text`;
@@ -109,14 +113,15 @@ werewolf/Alpha-King paranormal romance FICTION story (medieval-fantasy court
 setting — castles, furs, torchlight, snow, wolves — NOT a documentary, NOT
 modern day, NOT real people).
 
-${sheetText ? `CHARACTER SHEET (MANDATORY — every time one of these characters appears in a prompt, you MUST literally include their age and physical appearance description inline in that prompt, every single time, not just the first time. Do not assume the image model remembers earlier prompts — each image is generated independently):\n${sheetText}\n\nExample of correct usage: "Aelyn, age 22, dark hair and pale unseeing eyes in a grey wool dress, kneeling in a torch-lit hall, no text" — NOT just "a blind maid kneeling in a hall, no text".\n` : ''}
+${sheetText ? `CHARACTER SHEET (MANDATORY — include EVERY character's age and physical appearance inline in EVERY SINGLE PROMPT, unconditionally, even if that character is only referred to by "she"/"he"/a pronoun in this slot's narration, or isn't in this slot's narration at all. Do not assume the image model remembers earlier prompts or knows who's speaking — each image is generated independently with zero memory):\n${sheetText}\n\nExample of correct usage: "Aelyn, age 22, dark hair and pale unseeing eyes in a grey wool dress, kneels before Cedric, age mid-40s, a powerfully built Alpha King with winter-gray eyes and dark silver-streaked hair, in a torch-lit hall, no text" — NOT just "she kneels before him in a hall, no text".\n` : ''}
 Prompt rules:
-- 20-40 words, English, cinematic PHOTOREALISTIC dark-fantasy romance-novel-cover
+- 25-50 words, English, cinematic PHOTOREALISTIC dark-fantasy romance-novel-cover
   style — like a movie still shot on a real camera. NOT a painting, NOT a
   digital illustration, NOT cartoon/anime/CGI-render style. Real-looking human
   skin texture, hair, and lighting.
 - must match what the narration says at that moment
-- when a named character from the sheet appears, ALWAYS include their age + appearance inline (see above)
+- EVERY character from the sheet gets their full age + appearance inline, every prompt, no exceptions (see above)
+- also describe the specific setting/objects/atmosphere of that moment (not just characters) — lighting source, weather, furniture, what's in their hands
 - rich atmosphere: lighting (torchlight/moonlight/winter light), texture, mood
 - end every prompt with "no text"
 
