@@ -17,6 +17,18 @@ import json, os, re, subprocess, sys
 from pathlib import Path
 from multiprocessing import Pool
 
+# ASLI BUG (2026-08-17, teesri koshish): Kokoro pod par GPU dekh kar khud CUDA
+# istemal karne ki koshish karta hai — lekin multiprocessing.Pool (Linux
+# default "fork") ke andar CUDA context fork nahi ho sakta, is liye HAR
+# worker foran crash hota "Cannot re-initialize CUDA in forked subprocess"
+# ke sath (544 crashes ek real run mein, 0 chunks kabhi bane hi nahi — pichli
+# "hang" bhi shayad yehi cheez thi, sirf chhota log-tail check karne se
+# nazar nahi aayi thi). Kokoro ko kabhi GPU chahiye hi nahi tha (chhota
+# model, CPU par theek chalta hai) — CUDA ko is process-tree se BILKUL
+# GHAAYAB kar do (module import se PEHLE, taake main process ka pre-warm
+# aur har forked worker dono hamesha CPU par hi rahen, kabhi CUDA na chhuye).
+os.environ['CUDA_VISIBLE_DEVICES'] = ''
+
 VOICE = 'af_bella'
 SPEED = 1.0
 # 32 se 256 kiya (2026-08-17, user faisla) — pehle chhota video (36 chunks)
@@ -152,11 +164,10 @@ def main():
     print(f"Whisper ({WHISPER_MODEL}) se word timing nikaal raha hun...", flush=True)
     from faster_whisper import WhisperModel
 
-    device = 'cuda' if os.environ.get('POD_HAS_GPU', '1') == '1' else 'cpu'
-    try:
-        wmodel = WhisperModel(WHISPER_MODEL, device=device, compute_type='float16' if device == 'cuda' else 'int8')
-    except Exception:
-        wmodel = WhisperModel(WHISPER_MODEL, device='cpu', compute_type='int8')
+    # CUDA_VISIBLE_DEVICES='' upar module-level par set hai (Kokoro fork-crash
+    # se bachne ke liye) — is poore process ke liye CUDA kabhi nahi dikhega,
+    # is liye Whisper bhi seedha CPU par (koi wasted cuda-try-then-fail nahi)
+    wmodel = WhisperModel(WHISPER_MODEL, device='cpu', compute_type='int8')
     segments, info = wmodel.transcribe(str(out_mp3), word_timestamps=True, language='en')
 
     words, cues = [], []
