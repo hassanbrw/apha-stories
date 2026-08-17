@@ -64,28 +64,32 @@ function detectQSV() {
 let _qsv = null;
 function useQSV() { if (_qsv === null) _qsv = detectQSV(); return _qsv; }
 
-// NVENC (2026-08-17): pod ke rented RTX 4090/5090 ka hardware encoder — is
-// project mein pehli baar istemal ho raha hai (ab tak render 100% CPU-bound
-// tha, GPU bilkul khaali baithi rehti thi). Consumer NVIDIA cards par
-// concurrent NVENC sessions ki DEDICATED HARDWARE limit hoti hai (driver-
-// level cap) — CONC=128 parallel slot-clips agar sab EK SATH NVENC try
-// karte to zyadatar session-limit error se fail ho jate. Is liye NVENC
-// SIRF single-pass (threads=0) calls ke liye, jaise aakhri particles+
-// captions merge encode — wahan sirf EK session chalta hai, koi risk nahi.
-// Per-slot parallel building CPU (libx264) par hi rehta hai (already fast,
-// asli concurrency ke sath, threadsPerJob se safe cap hua).
-function detectNVENC() {
-  try {
-    execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=black:s=64x64:d=0.2',
-      '-c:v', 'h264_nvenc', '-f', 'null', '-'], { timeout: 15000 });
-    return true;
-  } catch { return false; }
-}
-let _nvenc = null;
-function useNVENC() { if (_nvenc === null) _nvenc = detectNVENC(); return _nvenc; }
+// NVENC DISABLED (2026-08-17): probe (64x64 test clip) reported NVENC
+// usable on a real pod, but the REAL merge encode (full 1920x1080 filter
+// chain — particles overlay + ass captions) then failed live with
+// "Frame Dimension less than the minimum supported value" — the trivial
+// probe passing does NOT guarantee the real multi-filter chain works,
+// and videoEnc() has no per-call fallback if the probed encoder fails at
+// actual encode time (unlike a failed slot, which just becomes a missing-
+// asset fallback — a failed SINGLE merge pass has nowhere to fall back
+// to mid-stream). Cost: a live pod run that had already gotten through
+// 175/183 slots + particles + captions successfully, right before this
+// hit. Disabled entirely rather than debug blind on another paid attempt
+// — revisit with real dimension-matching investigation in a future
+// session, not tonight. function kept (not deleted) so the investigation
+// starting point is preserved.
+// function detectNVENC() {
+//   try {
+//     execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=black:s=64x64:d=0.2',
+//       '-c:v', 'h264_nvenc', '-f', 'null', '-'], { timeout: 15000 });
+//     return true;
+//   } catch { return false; }
+// }
+// let _nvenc = null;
+// function useNVENC() { if (_nvenc === null) _nvenc = detectNVENC(); return _nvenc; }
 
-// crf (CPU/NVENC cq) aur global_quality (QSV) ek jaisa scale nahi hain, lekin
-// sab "kam = behtar quality" hain is liye seedha number pass karna theek hai.
+// crf (CPU) aur global_quality (QSV) ek jaisa scale nahi hain, lekin dono
+// "kam = behtar quality" hain is liye seedha number pass karna theek hai.
 // threads=0 matlab ffmpeg apna default (saare visible cores) istemal karega —
 // akela/aakhri encode (jaise final concat mux) ke liye theek hai. Per-slot
 // PARALLEL encode ke liye (CONC clips ek sath) explicit cap zaroori hai —
@@ -94,8 +98,6 @@ function useNVENC() { if (_nvenc === null) _nvenc = detectNVENC(); return _nvenc
 // concurrent clips hon sab aapas mein thread ke liye larte reh jate hain.
 function videoEnc(fps, crf, threads = 0) {
   const t = threads > 0 ? ['-threads', String(threads)] : [];
-  if (threads === 0 && useNVENC())
-    return ['-c:v', 'h264_nvenc', '-preset', 'p4', '-rc', 'vbr', '-cq', String(crf), '-b:v', '0', '-pix_fmt', 'yuv420p', '-r', String(fps)];
   return useQSV()
     ? ['-c:v', 'h264_qsv', '-preset', 'fast', '-global_quality', String(crf), '-pix_fmt', 'nv12', '-r', String(fps), ...t]
     : ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', String(crf), '-pix_fmt', 'yuv420p', '-r', String(fps), ...t];
