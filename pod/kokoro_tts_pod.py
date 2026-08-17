@@ -31,12 +31,27 @@ os.environ['CUDA_VISIBLE_DEVICES'] = ''
 
 VOICE = 'af_bella'
 SPEED = 1.0
-# 32 se 256 kiya (2026-08-17, user faisla) — pehle chhota video (36 chunks)
-# test karte waqt 32 hi kaafi tha (36 chunks ek hi round mein), lekin poora
-# ~65min video 100+ chunks bana sakta hai aur pod ke paas 384 tak cores hain —
-# 256 cap rakhne se os.cpu_count() hi asli limit banta hai (neeche min() mein),
-# taake bade video par bhi zyada se zyada cores istemal hon
-MAX_WORKERS = 256
+# ASLI BUG (2026-08-17, chauthi koshish): 215 workers = 215 ALAG copies model
+# ki memory mein (har worker apna KPipeline() khud load karta hai, koi
+# sharing nahi) — poora 251GB RAM khatam ho gaya, kuch workers OS ne silently
+# kill kar diye (koi Python exception nahi — SIGKILL, Pool hamesha ke liye
+# un dead workers ka wait karta reh gaya). 161/215 chunks pehle hi ban chuki
+# thin lekin kabhi upload nahi hui (SSH access nahi hai is setup mein rescue
+# karne ke liye) — poora kaam zaya gaya. Ab worker count sirf CPU cores se
+# nahi, MAUJOOD MEMORY se bhi mehdood hai (~1.5GB/worker generous estimate,
+# taake headroom rahe) — jo bhi chhota ho wahi asli cap banta hai.
+def _safe_worker_cap():
+    try:
+        with open('/proc/meminfo') as f:
+            for line in f:
+                if line.startswith('MemAvailable:'):
+                    kb = int(line.split()[1])
+                    return max(1, int((kb / 1024 / 1024) / 2.0))  # GB / 2GB-per-worker (observed ~1.16GB/worker, extra margin after the OOM loss)
+    except Exception:
+        pass
+    return 32  # /proc/meminfo na mile (non-Linux) to conservative fallback
+
+MAX_WORKERS = _safe_worker_cap()
 
 _pipeline = None  # har worker process mein EK dafa load hota hai (initializer)
 
@@ -75,14 +90,17 @@ def _gen_chunk(args):
 
 
 # Local/sequential run (tools/kokoro_tts.py) keeps 150-300 (fewer, bigger
-# chunks — no downside there, nothing runs in parallel). Pod version shrinks
-# this (2026-08-17, user faisla: "CPU minimum 50% utilize ho") so there are
-# ENOUGH chunks to actually occupy a 200-400 core box at once -- 36 chunks on
-# 384 cores was only ~9% utilized regardless of worker cap, since chunk COUNT
-# was the real ceiling, not the cap. Smaller chunks = each has less cross-
-# sentence context, so a slightly higher (but still small) risk of a chunk
-# boundary sounding a touch less smooth than a full-paragraph chunk would.
-def chunk_text(text, min_w=25, max_w=50):
+# chunks — no downside there, nothing runs in parallel). Pod version was
+# dropped to 25-50 words (~215 chunks) to hit high CPU utilization, but that
+# meant ~215 worker processes each loading their own full model copy — blew
+# through all 251GB RAM, OS silently killed workers, Pool hung forever,
+# 161/215 already-generated chunks lost (no SSH access to rescue them).
+# 90-150 (~70-80 chunks, 2026-08-17) is the actual sweet spot: still real
+# parallelism (vs the original 36), far short of the memory ceiling that
+# broke the 215-chunk attempt. Combined with the memory-aware MAX_WORKERS
+# cap above, this should stay safely within RAM regardless of the exact
+# core/RAM ratio a given pod rental happens to have.
+def chunk_text(text, min_w=90, max_w=150):
     paras = [p.strip() for p in re.split(r'\n\s*\n', text) if p.strip()]
     out, cur, n = [], [], 0
     for p in paras:
