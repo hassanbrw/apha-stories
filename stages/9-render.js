@@ -204,11 +204,27 @@ async function buildSlot(s, i, dirs, cfg, tmp, avatarPool, jobThreads = 0) {
     const mode = num % 4;                             // 0 zoomIn 1 zoomOut 2 panL 3 panR
     // thora bara scale taake pan ki gunjaish rahe
     const base = 1 + z;
+    // ASLI BUG (2026-08-18, "shake" complaint — isolated aur reproduce kiya
+    // gaya, sirf ek image + zoompan filter, poore pipeline se bilkul alag):
+    // motion (zoom ya pan) poori slot duration (aksar 15-20+ second, 450-
+    // 600+ frames) par phaila hua tha. z=0.12 par total pan range sirf
+    // ~617px (3x supersampled canvas par) hoti hai — 600 frames par phaila
+    // do to per-frame movement ~1px supersampled / ~0.33px native se bhi
+    // kam reh jata hai. zoompan apni crop position ko whole-pixel par hi
+    // rakh sakta hai, is liye itni chhoti per-frame harkat "kabhi hilo mat,
+    // phir 1px chalo" staircase ban jaati hai — yehi "halka sa shake" tha.
+    // FIX: total zoom/pan MIQDAAR (z=0.12) bilkul waisi hi rakho (halka pan
+    // ki niyat qaim), sirf harkat ko poori duration ke bajaye ek CHHOTI
+    // window (4s, 120 frames) mein mukammal karo, phir us position par ruk
+    // jao — per-frame movement kaafi bara ho jata hai (~1.7px native) taake
+    // staircase gayab ho jaye, bina total "kitni door" harkat badle.
+    const motionN = Math.min(n, 120);
+    const prog = `min(on\\,${motionN})/${motionN}`;   // 0→1 within motionN frames, phir wahin ruka rehta hai
     let zexpr, xexpr, yexpr;
-    if (mode === 0) { zexpr = `1+${z}*on/${n}`;            xexpr = `iw/2-(iw/zoom/2)`; yexpr = `ih/2-(ih/zoom/2)`; }
-    else if (mode === 1) { zexpr = `${base}-${z}*on/${n}`; xexpr = `iw/2-(iw/zoom/2)`; yexpr = `ih/2-(ih/zoom/2)`; }
-    else if (mode === 2) { zexpr = `${base}`;              xexpr = `(iw-iw/zoom)*(1-on/${n})`; yexpr = `ih/2-(ih/zoom/2)`; }  // pan left
-    else                 { zexpr = `${base}`;              xexpr = `(iw-iw/zoom)*(on/${n})`;   yexpr = `ih/2-(ih/zoom/2)`; }  // pan right
+    if (mode === 0) { zexpr = `1+${z}*${prog}`;            xexpr = `iw/2-(iw/zoom/2)`; yexpr = `ih/2-(ih/zoom/2)`; }
+    else if (mode === 1) { zexpr = `${base}-${z}*${prog}`; xexpr = `iw/2-(iw/zoom/2)`; yexpr = `ih/2-(ih/zoom/2)`; }
+    else if (mode === 2) { zexpr = `${base}`;              xexpr = `(iw-iw/zoom)*(1-${prog})`; yexpr = `ih/2-(ih/zoom/2)`; }  // pan left
+    else                 { zexpr = `${base}`;              xexpr = `(iw-iw/zoom)*${prog}`;   yexpr = `ih/2-(ih/zoom/2)`; }  // pan right
     await ff(['-loop', '1', '-i', img,
         '-vf', `scale=${CW}:${CH}:force_original_aspect_ratio=increase,crop=${CW}:${CH},` +
                `zoompan=z='${zexpr}':x='${xexpr}':y='${yexpr}':d=${n}:s=${CW}x${CH}:fps=${fps},` +
