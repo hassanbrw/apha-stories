@@ -28,8 +28,16 @@ ENV PYTHONUNBUFFERED=1
 # ImageFont.truetype() crash ho jata — captions generate hi nahi ho pati thi,
 # render har baar wahin fail hota. fonts-dejavu-core add kar diya (wahi font
 # jo captions.py ka Linux fallback path already expect karta hai).
+# ASLI BUG #2 (2026-08-17, isolated tonight's first real render attempt
+# that got past slot-building): stages/2-voice.js aur stages/9-render.js
+# dono `python` (as `python3` NAHI) call karte hain — apt ka python3.11
+# sirf `python3`/`python3.11` binary deta hai, `python` symlink NAHI
+# banata. Bare image par "spawnSync python ENOENT" se render har baar
+# particles.py par crash hota — is se pehle koi render pod par kabhi is
+# point tak pahunch hi nahi paya tha, is liye pata hi nahi chala. Debian
+# ka apna standard fix `python-is-python3` package hai.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.11 python3-pip python3.11-venv \
+    python3.11 python3-pip python3.11-venv python-is-python3 \
     ffmpeg \
     fonts-dejavu-core \
     curl unzip git ca-certificates \

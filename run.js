@@ -99,6 +99,14 @@ function chosen() {
     return;
   }
 
+  // ASLI BUG (2026-08-17): `broke` sirf per-video scope mein tha — koi stage
+  // fail ho jaye to error print ho jata tha, lekin poora process phir bhi
+  // exit code 0 se khatam hota (Node ka default) kyunke process.exit(1) kabhi
+  // call hi nahi hota tha. entrypoint.sh ka `set -e` is liye kabhi render
+  // crash catch nahi kar pata tha — script "KHATAM" print kar ke aage
+  // ($RCLONE upload) chala jata, jo phir khud fail hota (final.mp4 kabhi bana
+  // hi nahi) — do alag error messages, asal wajah dono baar yehi thi.
+  let anyBroke = false;
   for (const file of videos) {
     const spec = U.loadVideoSpec(file);
     const st = flag('redo') ? { done: {}, meta: {} } : U.loadState(spec.id);
@@ -162,9 +170,11 @@ function chosen() {
     const done = Object.keys(st.done);
     U.log(`\n  ${file}: ${done.length}/${STAGES.length} stages — ${done.join(', ')}`);
     if (st.meta.projectDir) U.log(`  project: ${path.relative(U.ROOT, st.meta.projectDir)}`);
+    if (broke) anyBroke = true;
   }
 
   line();
   U.log('  KHATAM');
   line();
+  if (anyBroke) process.exit(1);
 })();
