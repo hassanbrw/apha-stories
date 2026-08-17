@@ -70,7 +70,15 @@ RUN curl https://rclone.org/install.sh | bash
 # torch CUDA build — faster-whisper (Whisper GPU par chale) ke liye, Kokoro
 # khud CPU par bhi theek chalta hai (chhota model, 82M params)
 RUN pip3 install --no-cache-dir torch torchaudio --index-url https://download.pytorch.org/whl/cu124
-RUN pip3 install --no-cache-dir kokoro faster-whisper soundfile numpy
+# ASLI BUG #3 (2026-08-17): Pillow yahan kabhi tha hi nahi — tools/particles.py
+# `from PIL import Image, ImageDraw, ImageFilter` karta hai. Pehle koi render
+# is stage tak pahunch hi nahi paya tha (pehle python-symlink bug ne rok
+# rakha tha), is liye pata nahi chala — dikhne mein bilkul particles.py ka
+# kaam khatam hote hi crash hota, aur Vast.ai nonzero exit par khud restart
+# kar deta (pehle se pata chala tha), matlab poore 175/183 slots baar baar
+# banate rehte bina kabhi render mukammal huay — 6 restart cycles isi
+# session mein zaya huay is se pehle pakda gaya.
+RUN pip3 install --no-cache-dir kokoro faster-whisper soundfile numpy pillow
 
 WORKDIR /app
 
