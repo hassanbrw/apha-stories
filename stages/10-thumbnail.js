@@ -74,22 +74,29 @@ karo.** Koi text nahi, koi tashreeh nahi — bas scene.
 
 ${script.slice(0, 1200)}`, { maxTokens: 140, temperature: 0.75 }).catch(() => 'a handsome, cold Alpha King looming over a beautiful, low-status heroine in a torch-lit palace hall');
 
+  // 2026-08-19 user faisla: characters HAMESHA bright, clearly-lit chehron ke
+  // sath aur 4K/ultra-sharp detail mein hon — atmospheric shadows background/
+  // rim-light mein theek hain, lekin heroine/Alpha King ka CHEHRA kabhi
+  // andhera/muddy nahi hona chahiye (YouTube thumbnail grid mein chhota dikhta
+  // hai, isi liye subject ka bright + sharp hona zaroori hai, thumbnail-click
+  // rate ke liye bhi).
+  const QUALITY = `4K ultra-detailed, tack-sharp focus on the face, subject's face brightly and clearly lit (never dark or shadowed), high dynamic range, crisp fine detail on skin and eyes.`;
   const styles = [
     // 1 — single dramatic close-up, warm palace lighting (Lily/Alba ka andaz)
     `YouTube thumbnail, photorealistic romance-novel-cover style, 16:9. ${subject}. `
     + `Close-up to mid-torso framing, cinematic dramatic lighting, warm amber/gold `
     + `torchlight and candlelight tones, shallow depth of field, rich skin tones, `
-    + `intense emotional expression. NO TEXT, no letters, no watermark, no logos.`,
+    + `intense emotional expression. ${QUALITY} NO TEXT, no letters, no watermark, no logos.`,
     // 2 — winter/ice contrast (Alpha King ka reusable visual motif)
     `YouTube thumbnail, photorealistic romance-novel-cover style, 16:9. ${subject}. `
     + `Cold winter-blue and silver lighting contrasted with warm skin tones, `
     + `piercing ice-pale eyes, dramatic rim light, misty atmosphere, `
-    + `cinematic close-up framing. NO TEXT, no letters, no watermark, no logos.`,
+    + `cinematic close-up framing. ${QUALITY} NO TEXT, no letters, no watermark, no logos.`,
     // 3 — saaf cinematic (safe option, thora zyada headroom agar text baad mein add karna ho)
     `Cinematic romance-novel-cover thumbnail, photorealistic, 16:9: ${subject}, `
     + `golden hour or torch-lit warm tones, shallow depth of field, dramatic `
     + `sky or stone-hall background, negative space on one side for a title. `
-    + `NO TEXT, no letters, no watermark, no logos.`,
+    + `${QUALITY} NO TEXT, no letters, no watermark, no logos.`,
   ];
 
   const dir = U.p(spec.id, 'thumbnail');

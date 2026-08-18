@@ -153,6 +153,19 @@ const arg = (name, def = null) => {
         throw new Error(`final.mp4 download ke baad bhi nahi mila (ya khaali hai) — pod ka render crash hua hoga, R2 par kabhi upload hi nahi hui. Video ID: ${id}`);
       }
       U.ok(`final.mp4 mil gayi: work/${id}/final.mp4 (${(fs.statSync(finalPath).size / 1048576).toFixed(1)} MB)`);
+
+      // Google Drive par khud-ba-khud upload (mobile par Drive app se sync ho
+      // jata hai) — best-effort, agar title-description.txt abhi tak nahi bana
+      // (poori tarah manual/Claude step hai render ke baad) to sirf jo mile
+      // wahi upload karo, poora render job is wajah se fail mat karo.
+      try {
+        const { deliverVideo } = require('../lib/gdrive.js');
+        U.log(`\n== Google Drive par upload ho raha hai ==`);
+        const target = deliverVideo(id, wd);
+        U.ok(`Drive par pahunch gaya: ${target}`);
+      } catch (e) {
+        U.warn(`Drive upload nahi ho saka (${e.message}) — baad mein "node tools/deliver.js ${id}" chala lena`);
+      }
     }
   } finally {
     U.log(`\n== instance DELETE kar raha hun (paisa bachane ke liye — sirf stop nahi) ==`);
