@@ -355,12 +355,28 @@ Jawab: {"keyEvents": ["...", "...", "...", "...", "..."]} — English mein.`,
   U.ok(`key events (topic se, fidelity ${Math.round(fidelity * 100)}%): ${keyEvents.join(' | ')}`);
 
   // ---------- PASS 1: outline + cast (keyEvents FIXED hain, sirf arrange karna hai) ----------
+  // ASLI BUG (video "seventh-bride-survives", 2026-08-18): avoidNames sirf
+  // PROMPT mein diye jate the, jawab kabhi VALIDATE nahi hota tha — model ne
+  // "Kaelen" aur "Lord Corvin" (dono avoidNames mein maujood) phir bhi de
+  // diye, koi bhi check pakad nahi paya kyunke koi check tha hi nahi. Ab
+  // response ko avoidNames ke khilaf seedha check karte hain (substring
+  // match, taake "Corvin" vs "Lord Corvin" jaisi partial reuse bhi pakdi
+  // jaye), aur clash ho to reinforced note ke sath dobara try karte hain.
+  const nameClashes = (c) => {
+    if (!c) return [];
+    const cand = [c.heroine, c.alphaKing, c.antagonist].filter(Boolean).map(n => n.toLowerCase());
+    return avoidNames.filter(a => cand.some(c2 => c2.includes(a.toLowerCase()) || a.toLowerCase().includes(c2)));
+  };
   const MAX_OUTLINE_TRIES = 3;
-  let outlineResp, list, cast;
+  let outlineResp, list, cast, clashes = [];
   for (let attempt = 1; attempt <= MAX_OUTLINE_TRIES; attempt++) {
     outlineResp = await AI.chatJson(model,
 `Werewolf/Alpha-King paranormal romance audiobook ke liye ${beats} BEATS ka
 outline banao. Ye FICTION hai — asli waqiya nahi, kahani ban rahi hai.
+${clashes.length ? `\nPICHLI KOSHISH mein tumne in naamon mein se kam se kam ek dobara istemal kar diya
+tha jo PEHLE se mana kiya gaya tha: ${clashes.join(', ')} — is dafa in mein
+se KOI BHI naam (na poora, na hissa) ISTEMAL MAT KARO, bilkul NAYA/ASLI naam
+socho.\n` : ''}
 
 TOPIC / PREMISE (background samajhne ke liye):
 ${topic}
@@ -424,7 +440,10 @@ BAHUT AHEM: jawab sirf ENGLISH mein. Hindi/Urdu script (Devanagari) BILKUL nahi.
       continue;
     }
     cast = outlineResp?.cast && outlineResp.cast.heroine && outlineResp.cast.alphaKing ? outlineResp.cast : null;
-    break;
+    clashes = nameClashes(cast);
+    if (!clashes.length) break;
+    U.warn(`cast naam pehle istemal ho chuke hain: ${clashes.join(', ')} (cast: ${cast.heroine} / ${cast.alphaKing}${cast.antagonist ? ' / ' + cast.antagonist : ''}) — dobara koshish (${attempt}/${MAX_OUTLINE_TRIES})`);
+    if (attempt === MAX_OUTLINE_TRIES) U.warn(`${MAX_OUTLINE_TRIES} koshishon ke baad bhi naam clash — isi cast ke sath aage badh raha hun (${cast.heroine} / ${cast.alphaKing}${cast.antagonist ? ' / ' + cast.antagonist : ''})`);
   }
   if (cast) st.meta.cast = cast;
 
