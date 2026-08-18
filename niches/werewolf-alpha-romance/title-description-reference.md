@@ -157,6 +157,7 @@ descriptions, never from the title).
 
 1. **Structure**: `[Setup clause, present tense] - [pivot word: until/but/so] [twist clause]`. 15-21 words, 50-100 characters total.
 2. **Open with "She [verb]..."** (heroine's action) or **"The Alpha King/Alpha's..."** — these two openers cover half of what works. A number-based opener ("For 7 years...", "100 princesses...") is a strong third option when the story has a concrete number worth naming.
+2a. **"Alpha King" (or "the Alpha" / "the King") must appear somewhere in the title, every time — even when the opener is "She..."** Only 43% of Lily's titles literally say "Alpha King" (68% say "Alpha" in any form) because her channel also runs CEO-romance, vampire-king, and dragon-emperor stories that don't use the trope at all — but our niche is specifically Alpha-King romance, every video's hero IS the Alpha King, so the title should always name him, not just imply "the King"/"him." User's explicit instruction (2026-08-19).
 3. **No question marks, ever.**
 4. Ellipsis only at the very end, only if the title benefits from an implied "there's more."
 5. Quoted dialogue is a legitimate twist/payoff device — use a character's actual line if the script has a strong one.
