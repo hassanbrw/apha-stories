@@ -202,9 +202,7 @@ async function buildSlot(s, i, dirs, cfg, tmp, avatarPool, jobThreads = 0) {
     // 3x par wapas (2026-08-17, user faisla — smoothness ko priority).
     const SS = 3, CW = W * SS, CH = H * SS;
     const mode = num % 4;                             // 0 zoomIn 1 zoomOut 2 panL 3 panR
-    // thora bara scale taake pan ki gunjaish rahe
-    const base = 1 + z;
-    // ASLI BUG (2026-08-18, "shake" complaint — isolated aur reproduce kiya
+    // ASLI BUG #1 (2026-08-18, "shake" complaint — isolated aur reproduce kiya
     // gaya, sirf ek image + zoompan filter, poore pipeline se bilkul alag):
     // motion (zoom ya pan) poori slot duration (aksar 15-20+ second, 450-
     // 600+ frames) par phaila hua tha. z=0.12 par total pan range sirf
@@ -213,18 +211,37 @@ async function buildSlot(s, i, dirs, cfg, tmp, avatarPool, jobThreads = 0) {
     // kam reh jata hai. zoompan apni crop position ko whole-pixel par hi
     // rakh sakta hai, is liye itni chhoti per-frame harkat "kabhi hilo mat,
     // phir 1px chalo" staircase ban jaati hai — yehi "halka sa shake" tha.
-    // FIX: total zoom/pan MIQDAAR (z=0.12) bilkul waisi hi rakho (halka pan
-    // ki niyat qaim), sirf harkat ko poori duration ke bajaye ek CHHOTI
-    // window (4s, 120 frames) mein mukammal karo, phir us position par ruk
-    // jao — per-frame movement kaafi bara ho jata hai (~1.7px native) taake
-    // staircase gayab ho jaye, bina total "kitni door" harkat badle.
-    const motionN = Math.min(n, 120);
-    const prog = `min(on\\,${motionN})/${motionN}`;   // 0→1 within motionN frames, phir wahin ruka rehta hai
+    //
+    // ASLI BUG #2 (2026-08-18, "image poori tarah frozen/static" complaint —
+    // user ne screen-recording bheji: EK image 21+ second tak bilkul static
+    // rahi jab k caption 4-5 alag lines cycle kar chuki thi): pehla fix
+    // (motionN=120, 4s window) motion ko fixed 4s mein mukammal kar deta,
+    // phir BAAQI POORI slot duration (is niche mein aksar 15-20+ second) ke
+    // liye bilkul ruk jata — chhote slots ke liye theek tha, lekin lambe
+    // slots ka 80%+ hissa completely frozen dikhta.
+    //
+    // ASLI FIX: har slot ke liye zoom/pan MIQDAAR (z) ko UPAR badhao (Z_MAX
+    // tak) taake poori slot duration (n frames) par phaila kar bhi per-frame
+    // movement safe (>=SAFE_PXPERFRAME) rahe — motion poori duration mein
+    // CHALTI rehti hai, koi lamba freeze nahi. Agar konsa slot itna lamba ho
+    // ke Z_MAX (natural-looking zoom ki hadd) par bhi poori duration cover
+    // nahi hoti, tab hi baaki hisse mein hold hota hai — lekin ab hold
+    // hamesha bohot chhota hissa hai, dominant nahi.
+    const SAFE_PXPERFRAME = 5.14;     // supersampled px/frame — 2026-08-18 ke pehle fix se verified safe threshold
+    const Z_MAX = 0.35;               // zyada se zyada zoom/pan miqdaar — is se aage "Ken Burns" natural nahi lagta
+    const pixelRangeForZ = zz => CW * zz / (1 + zz);   // == iw - iw/(1+zz), exact (approx nahi)
+    const target = SAFE_PXPERFRAME * n;
+    // pixelRangeForZ(neededZ) = target ko zz ke liye solve kiya (algebra: upar comment dekho)
+    const neededZ = target / (CW - target);
+    const zEff = Math.min(Z_MAX, Math.max(z, neededZ > 0 ? neededZ : z));
+    const baseEff = 1 + zEff;
+    const motionN = Math.min(n, Math.max(1, Math.round(pixelRangeForZ(zEff) / SAFE_PXPERFRAME)));
+    const prog = `min(on\\,${motionN})/${motionN}`;   // 0→1 within motionN frames, phir wahin ruka rehta hai (ab n ke bohot qareeb, chhota hold)
     let zexpr, xexpr, yexpr;
-    if (mode === 0) { zexpr = `1+${z}*${prog}`;            xexpr = `iw/2-(iw/zoom/2)`; yexpr = `ih/2-(ih/zoom/2)`; }
-    else if (mode === 1) { zexpr = `${base}-${z}*${prog}`; xexpr = `iw/2-(iw/zoom/2)`; yexpr = `ih/2-(ih/zoom/2)`; }
-    else if (mode === 2) { zexpr = `${base}`;              xexpr = `(iw-iw/zoom)*(1-${prog})`; yexpr = `ih/2-(ih/zoom/2)`; }  // pan left
-    else                 { zexpr = `${base}`;              xexpr = `(iw-iw/zoom)*${prog}`;   yexpr = `ih/2-(ih/zoom/2)`; }  // pan right
+    if (mode === 0) { zexpr = `1+${zEff}*${prog}`;               xexpr = `iw/2-(iw/zoom/2)`; yexpr = `ih/2-(ih/zoom/2)`; }
+    else if (mode === 1) { zexpr = `${baseEff}-${zEff}*${prog}`; xexpr = `iw/2-(iw/zoom/2)`; yexpr = `ih/2-(ih/zoom/2)`; }
+    else if (mode === 2) { zexpr = `${baseEff}`;                 xexpr = `(iw-iw/zoom)*(1-${prog})`; yexpr = `ih/2-(ih/zoom/2)`; }  // pan left
+    else                 { zexpr = `${baseEff}`;                 xexpr = `(iw-iw/zoom)*${prog}`;   yexpr = `ih/2-(ih/zoom/2)`; }  // pan right
     await ff(['-loop', '1', '-i', img,
         '-vf', `scale=${CW}:${CH}:force_original_aspect_ratio=increase,crop=${CW}:${CH},` +
                `zoompan=z='${zexpr}':x='${xexpr}':y='${yexpr}':d=${n}:s=${CW}x${CH}:fps=${fps},` +
