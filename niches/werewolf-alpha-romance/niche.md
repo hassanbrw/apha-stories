@@ -281,6 +281,7 @@ have to supply one. Before starting any new video:
 - 2026-08-16 — a war-orphaned nurse is the only one the comatose Alpha King responds to; he wakes remembering only her voice and the court must explain who she is — work/comatose-king-nurse-voice/
 - 2026-08-17 — an elderly healer is de-aged into a stranger by a botched spell; the Alpha King she once saved as a boy searches for his old healer, never suspecting she's the young woman now treating him — work/deaged-healer-forgotten-debt/
 - 2026-08-18 — a servant girl has secretly signed the illiterate Alpha King's personal letters in his name for three years; no one, including his own council, knows he never learned to read — work/illiterate-king-secret-letters/
+- 2026-08-18 — every bride the Alpha King has taken has died within a week of the mating bond; the seventh, a laundress with nothing left to lose, survives, and no one can explain why — work/seventh-bride-survives/
 
 ## 50 topic ideas
 

@@ -29,6 +29,50 @@ function escapeFilterPath(p) {
   return p.replace(/\\/g, '/').replace(/:/g, '\\:');
 }
 
+// ASS "H:MM:SS.CS" <-> seconds. Dialogue line format ke 9 commas Text se
+// PEHLE aate hain (Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,
+// Effect) — Text khud commas rakh sakta hai (misal "SERVANT GIRL, HE SAID"),
+// is liye naive split(',') Text ko tor deta — 9th comma tak hi manually
+// split karte hain, baaki sab Text hai.
+function assTimeToSec(t) {
+  const m = t.match(/^(\d+):(\d{2}):(\d{2})\.(\d{2})$/);
+  if (!m) return 0;
+  return (+m[1]) * 3600 + (+m[2]) * 60 + (+m[3]) + (+m[4]) / 100;
+}
+function secToAssTime(sec) {
+  sec = Math.max(0, sec);
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = Math.floor(sec % 60);
+  const cs = Math.round((sec - Math.floor(sec)) * 100);
+  return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(cs).padStart(2, '0')}`;
+}
+// Poori .ass ko [segStart,segEnd) time-window ke liye chhota, REBASED
+// (times ko segStart se shift kiya gaya) .ass banata hai — parallel render
+// segments ke liye, taake har segment ka apna sahi-waqt-par-caption ho.
+function sliceAssFile(srcPath, destPath, segStart, segEnd) {
+  const content = fs.readFileSync(srcPath, 'utf8');
+  const lines = content.split('\n');
+  const eventsIdx = lines.findIndex(l => l.trim() === '[Events]');
+  const header = lines.slice(0, eventsIdx + 2);   // [Events] + "Format:" line
+  const kept = [];
+  for (let i = eventsIdx + 2; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.startsWith('Dialogue:')) continue;
+    let commaCount = 0, cut = -1;
+    for (let c = 0; c < line.length; c++) {
+      if (line[c] === ',') { commaCount++; if (commaCount === 9) { cut = c; break; } }
+    }
+    if (cut === -1) continue;
+    const fields = line.slice(0, cut).split(',');
+    const text = line.slice(cut + 1);
+    const start = assTimeToSec(fields[1]), end = assTimeToSec(fields[2]);
+    if (end <= segStart || start >= segEnd) continue;
+    fields[1] = secToAssTime(Math.max(0, start - segStart));
+    fields[2] = secToAssTime(Math.min(segEnd - segStart, end - segStart));
+    kept.push(fields.join(',') + ',' + text);
+  }
+  fs.writeFileSync(destPath, header.join('\n') + '\n' + kept.join('\n') + '\n', 'utf8');
+}
+
 const W = 1920, H = 1080;
 // ek sath kitne slot clips — pehle hardcoded 3 tha aur config.json ka
 // concurrency.render (jo isi maqsad ke liye tha) kabhi padha hi nahi jata
@@ -415,75 +459,109 @@ module.exports = async function (spec, cfg, st) {
   U.log('   concat (video-only)...');
   await ff(['-f', 'concat', '-safe', '0', '-i', listF, '-c', 'copy', silent], 1800000);
 
-  // ---------- particles + captions EK HI PASS mein (pehle 2 alag re-encode the) ----------
-  // ASLI OPTIMIZATION: particles aur captions har video par DO poore-frame
-  // re-encode passes leti thi (particles → intermediate file → captions →
-  // dusra intermediate file). Ek 60min video ke liye ye do bar poora encode
-  // karna sab se bada waqt-zaya tha. Ab dono overlay EK HI ffmpeg call mein
-  // (ek filter_complex chain), sirf ek encode pass — roughly aadha waqt.
+  // ---------- particles + captions, PARALLEL TIME-SEGMENTS mein (2026-08-18) ----------
+  // ASLI BUG: ek hi ffmpeg process mein poore video (15-20+ min) par particles
+  // overlay + ass burn-in — isolated test se confirmed (threads=1 vs 4 vs 12
+  // par sirf 1.44x speedup, phir flat) ke ye filter chain (overlay + libass)
+  // EK PROCESS ke andar ~4 threads se zyada scale hi nahi karti, chahe
+  // -threads 0 (auto) do ya 384. Pod par isi wajah se sirf ~1.2% CPU (4-5
+  // cores/384) use hota tha poori is step ke dauran — encoder ke paas
+  // sainkron idle threads thay lekin filter stage unhen kabhi kaam nahi de
+  // pati thi. FIX: poore video ko N chhote TIME-SEGMENTS mein baanto (jitne
+  // bhi pod cores hon, unke hisaab se — chhoti local machine par bhi 1-3
+  // segments milte hain, koi crash nahi), har segment apna ALAG ffmpeg
+  // process (per-slot clip-building wale HI proven concurrency pattern se) —
+  // phir sab segments concat. Har segment ka apna rebased .ass (sirf usi
+  // waqt-range ke Dialogue lines, times shift kiye gaye) aur particles loop
+  // ka phase bhi (segStart % loopSeconds) se offset kiya gaya taake segment
+  // boundary par particles ka koi visible "jump" na ho.
   let current = silent;
   const intermediates = [];
-  const inputs = ['-i', silent];
-  const filterParts = [];
-  let curLabel = '0:v';
-  let nextInput = 1;
 
-  if (cfg.particles?.enabled) {
+  if (cfg.particles?.enabled || cfg.captions?.enabled) {
     const assetsDir = path.join(U.ROOT, 'assets');
     fs.mkdirSync(assetsDir, { recursive: true });
     const loopMov = path.join(assetsDir, 'particles_loop.mov');
-    if (!fs.existsSync(loopMov)) {
+    const loopSeconds = cfg.particles?.loopSeconds || 20;
+    if (cfg.particles?.enabled && !fs.existsSync(loopMov)) {
       U.log('   particles loop generate ho raha hai (ek dafa, phir sab videos mein reuse)...');
       execFileSync('python', [path.join(U.ROOT, 'tools', 'particles.py'),
         loopMov, String(W), String(H), String(cfg.canvas.fps),
-        String(cfg.particles.loopSeconds || 20),
-        String(cfg.particles.count || 45), String(cfg.particles.opacity || 60)],
+        String(loopSeconds), String(cfg.particles.count || 45), String(cfg.particles.opacity || 60)],
         { stdio: 'inherit', timeout: 1800000 });
     }
-    inputs.push('-stream_loop', '-1', '-i', loopMov);
-    filterParts.push(`[${nextInput}:v]format=rgba[p]`);
-    filterParts.push(`[${curLabel}][p]overlay=0:0:shortest=1[vp]`);
-    curLabel = 'vp';
-    nextInput++;
-  }
 
-  if (cfg.captions?.enabled) {
-    const wordsFile = U.p(id, 'voice', 'words.json');
-    if (!fs.existsSync(wordsFile)) {
-      U.warn('words.json nahi mila — captions skip (stage 2 dobara chalao)');
-    } else {
-      // 2026-08-17 rewrite: pehle captions.py PNG-per-word-state banata
-      // (~10K PNGs ek 55min video ke liye) phir unhein qtrle se alag alpha-
-      // video (caps.mov) mein encode kar ke overlay karta — ye do bhaari
-      // steps (~10min + intermediate encode) ab khatam. Seedha .ass likho
-      // aur ffmpeg ke NATIVE `ass=` filter se isi merge-pass mein burn karo
-      // — koi PNG, koi separate encode, koi overlay step nahi (lib/ass-
-      // captions.js dekho).
-      const capsDir = U.p(id, 'captions');
-      fs.mkdirSync(capsDir, { recursive: true });
-      const assFile = path.join(capsDir, 'captions.ass');
-      const info = generateAssCaptions(wordsFile, assFile, {
-        W, H, total, highlightHex: cfg.captions.highlightColor || '#FFD700',
-      });
-      U.log(`   captions.ass — ${info.groups} groups, ${info.lines} word-highlight lines`);
-      filterParts.push(`[${curLabel}]ass='${escapeFilterPath(assFile)}'[vc]`);
-      curLabel = 'vc';
+    let assFile = null;
+    if (cfg.captions?.enabled) {
+      const wordsFile = U.p(id, 'voice', 'words.json');
+      if (!fs.existsSync(wordsFile)) {
+        U.warn('words.json nahi mila — captions skip (stage 2 dobara chalao)');
+      } else {
+        const capsDir = U.p(id, 'captions');
+        fs.mkdirSync(capsDir, { recursive: true });
+        assFile = path.join(capsDir, 'captions.ass');
+        const info = generateAssCaptions(wordsFile, assFile, {
+          W, H, total, highlightHex: cfg.captions.highlightColor || '#FFD700',
+        });
+        U.log(`   captions.ass — ${info.groups} groups, ${info.lines} word-highlight lines`);
+      }
     }
-  }
 
-  if (filterParts.length) {
-    filterParts.push(`[${curLabel}]format=yuv420p[vout]`);
+    // segment count: cores/4 (isolated test se ~4 threads/process ke baad
+    // returns flat ho jate hain), 1-32 ke beech clamp (chhoti machine par
+    // bhi kaam kare, bohot bare host par bhi sensible tadaad rahe).
+    const fps = cfg.canvas.fps;
+    const cores = os.cpus().length || 1;
+    const segCount = Math.max(1, Math.min(32, Math.floor(cores / 4)));
+    const segThreads = Math.max(1, Math.min(6, Math.floor(cores / segCount)));
+    const segLen = real / segCount;
+    U.log(`   particles + captions — ${segCount} parallel segments (${segThreads} thread/segment, ${cores} cores)...`);
+
     const merged = path.join(tmp, 'video_merged.mp4');
-    U.log('   particles + captions overlay (ek hi encode pass)...');
-    // ASLI BUG: 30 min timeout kaafi nahi tha — poore overlay/caption compositing
-    // (pixel-level blend, encoder se pehle) ek 60min video ke liye 30 min se
-    // zyada le sakta hai (naapa gaya: 27+ min par abhi bhi chal raha tha jab
-    // timeout lag gaya). 90 min budget de diya.
-    await ff([...inputs, '-filter_complex', filterParts.join(';'), '-map', '[vout]',
-        ...videoEnc(cfg.canvas.fps, 20), merged], 5400000);
+    const segFiles = await Promise.all(Array.from({ length: segCount }, async (_, seg) => {
+      const segStart = seg * segLen;
+      const segEnd = seg === segCount - 1 ? real : (seg + 1) * segLen;
+      const segFrames = Math.round((segEnd - segStart) * fps);
+      if (segFrames <= 0) return null;
+
+      const inputs = ['-ss', String(segStart), '-i', silent];
+      const filterParts = [];
+      let curLabel = '0:v';
+      let nextInput = 1;
+
+      if (cfg.particles?.enabled) {
+        const phase = segStart % loopSeconds;
+        inputs.push('-ss', String(phase), '-stream_loop', '-1', '-i', loopMov);
+        filterParts.push(`[${nextInput}:v]format=rgba[p]`);
+        filterParts.push(`[${curLabel}][p]overlay=0:0:shortest=1[vp]`);
+        curLabel = 'vp';
+        nextInput++;
+      }
+
+      if (assFile) {
+        const segAss = path.join(tmp, `seg_${seg}.ass`);
+        sliceAssFile(assFile, segAss, segStart, segEnd);
+        filterParts.push(`[${curLabel}]ass='${escapeFilterPath(segAss)}'[vc]`);
+        curLabel = 'vc';
+      }
+
+      filterParts.push(`[${curLabel}]format=yuv420p[vout]`);
+      const segOut = path.join(tmp, `seg_${seg}.mp4`);
+      await ff([...inputs, '-filter_complex', filterParts.join(';'), '-map', '[vout]',
+          '-frames:v', String(segFrames), ...videoEnc(fps, 20, segThreads), segOut], 5400000);
+      return segOut;
+    }));
+
+    const okSegs = segFiles.filter(Boolean);
+    if (!okSegs.length) throw new Error('koi bhi particles/captions segment nahi bana');
+    const segListF = path.join(tmp, 'seg_list.txt');
+    fs.writeFileSync(segListF, okSegs.map(p => `file '${path.resolve(p).replace(/'/g, "'\\''")}'`).join('\n') + '\n');
+    await ff(['-f', 'concat', '-safe', '0', '-i', segListF, '-c', 'copy', merged], 1800000);
+    for (const s of okSegs) fs.rmSync(s, { force: true });
+
     intermediates.push(merged);
     current = merged;
-    U.ok('particles + captions overlay ho gayi');
+    U.ok(`particles + captions overlay ho gayi (${okSegs.length} parallel segments)`);
   }
 
   const final = U.p(id, 'final.mp4');

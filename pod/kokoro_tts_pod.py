@@ -51,9 +51,24 @@ def _safe_worker_cap():
                     # zyada computed cap (40 workers yahan), aur 40 parallel
                     # PyTorch+Kokoro+numpy processes ka asli footprint 2GB se
                     # zyada nikla (chunk 49/77 par ruk gaya, cpu_util 0%, wahi
-                    # "Pool dead workers ka wait" signature). 3.0 + hard 32
-                    # ceiling taake bade hosts par bhi kabhi control se bahar na jaye.
-                    return max(1, min(32, int((kb / 1024 / 1024) / 3.0)))
+                    # "Pool dead workers ka wait" signature). 3.0 GB/worker
+                    # formula waisi hi rakhi (verified safe — usi shaam ek
+                    # 384-core/257GB host par formula khud 85 workers
+                    # calculate karta, MemAvailable ke hisaab se).
+                    #
+                    # ASLI BUG #3 (2026-08-18, same shaam, doosra real run):
+                    # hard ceiling 32 tha — formula khud ye 384-core host ke
+                    # liye ~85 workers safe bata raha tha, lekin ceiling ne
+                    # zabardasti 32 par rok diya, poore run mein sirf 8.3% CPU
+                    # use hua (32/384 cores) jab k 251GB+ RAM available thi
+                    # (isi run mein 32 workers ne kul 1GB se bhi kam RAM use
+                    # kiya — formula ka apna estimate bohot conservative hai).
+                    # Ceiling ko 128 tak barhaya (RENDER_CONC ka wahi precedent
+                    # is codebase mein already istemal hota hai bade hosts ke
+                    # liye) — MEMORY FORMULA hi asli safety-net rehta hai, ye
+                    # ceiling sirf ek dur ki outer-bound hai, chhoti hosts par
+                    # formula khud hi kam number degi.
+                    return max(1, min(128, int((kb / 1024 / 1024) / 3.0)))
     except Exception:
         pass
     return 32  # /proc/meminfo na mile (non-Linux) to conservative fallback
