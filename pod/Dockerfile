@@ -67,8 +67,9 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 RUN curl https://rclone.org/install.sh | bash
 
 # ---------- python deps ----------
-# torch CUDA build — faster-whisper (Whisper GPU par chale) ke liye, Kokoro
-# khud CPU par bhi theek chalta hai (chhota model, 82M params)
+# torch/torchaudio — Kokoro (CPU, chhota model) aur forced alignment
+# (torchaudio MMS_FA — script ka known text audio se align karta hai,
+# Whisper-style speech-recognition ki zaroorat nahi) dono ke liye.
 RUN pip3 install --no-cache-dir torch torchaudio --index-url https://download.pytorch.org/whl/cu124
 # ASLI BUG #3 (2026-08-17): Pillow yahan kabhi tha hi nahi — tools/particles.py
 # `from PIL import Image, ImageDraw, ImageFilter` karta hai. Pehle koi render
@@ -78,7 +79,7 @@ RUN pip3 install --no-cache-dir torch torchaudio --index-url https://download.py
 # kar deta (pehle se pata chala tha), matlab poore 175/183 slots baar baar
 # banate rehte bina kabhi render mukammal huay — 6 restart cycles isi
 # session mein zaya huay is se pehle pakda gaya.
-RUN pip3 install --no-cache-dir kokoro faster-whisper soundfile numpy pillow
+RUN pip3 install --no-cache-dir kokoro soundfile numpy pillow
 
 WORKDIR /app
 

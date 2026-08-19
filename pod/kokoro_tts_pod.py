@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Kokoro TTS (pod, PARALLEL) -> voiceover.mp3, phir faster-whisper se word-level
-timing nikaal kar words.json + voiceover.srt banata hai.
+Kokoro TTS (pod, PARALLEL) -> voiceover.mp3, phir torchaudio forced alignment
+(MMS_FA) se word-level timing nikaal kar words.json + voiceover.srt banata hai.
 
 Local machine (Windows) par yehi chunking sequential thi — multiprocessing
 Windows ke sandboxed process-tree mein "PermissionError: WinError 5" de kar
@@ -9,7 +9,18 @@ toot jati thi (OS-level restriction, code ka bug nahi). Linux pod par ye
 restriction nahi hoti, is liye yahan multiprocessing.Pool se saare pod cores
 istemal karte hain — chunks ek sath, sequential nahi.
 
-istemal: kokoro_tts_pod.py <workdir> <voice> <speed> <whisper_model>
+ASLI WAJAH forced alignment (Whisper HATA DIYA, 2026-08-19): Whisper poori
+speech-recognition kar raha tha (audio sun kar guess karta kya bola gaya)
+jab k hamein pehle se EXACT pata hai kya bola gaya — wahi script.txt jo
+Kokoro ko diya gaya. Forced alignment (known text -> audio timing) bohot
+halka kaam hai (ek forward pass + DP alignment, koi autoregressive decode
+nahi). Isi raat ek real run ne ye confirm kiya: Whisper (CPU, 4 threads —
+faster-whisper ka default jo cpu_threads unset chhodne se milta hai) 47.8min
+audio par 90min poll-timeout se bhi zyada le gaya, poora pod waste hua
+(instance destroy ho gaya bina kaam complete huay). Forced alignment isi
+class ka masla structurally khatam kar deta hai.
+
+istemal: kokoro_tts_pod.py <workdir> <voice> <speed> [unused]
 chahiye: workdir/script.txt
 banata hai: workdir/voice/voiceover.mp3, voiceover.srt, words.json
 """
@@ -153,8 +164,6 @@ def main():
     wd = Path(sys.argv[1])
     VOICE = sys.argv[2] if len(sys.argv) > 2 else 'af_bella'
     SPEED = float(sys.argv[3]) if len(sys.argv) > 3 else 1.0
-    WHISPER_MODEL = sys.argv[4] if len(sys.argv) > 4 else 'small'
-
     vdir = wd / 'voice'
     vdir.mkdir(parents=True, exist_ok=True)
     chunks_dir = vdir / 'kokoro_chunks'
@@ -200,39 +209,89 @@ def main():
          '-of', 'default=nw=1:nk=1', str(out_mp3)], capture_output=True, text=True).stdout.strip())
     print(f"voiceover.mp3 - {dur:.1f}s ({dur / 60:.2f} min)", flush=True)
 
-    # ---------- Whisper: word-level timing wapas nikalo ----------
-    # ASLI BUG (2026-08-19): device='cuda' ka WhisperModel() CONSTRUCTOR
-    # kamyaab ho jata tha ("Whisper GPU par chal raha hai" print bhi ho
-    # jata), lekin uske FAURAN baad wala .transcribe() call — jahan asli
-    # cuDNN/cuBLAS kaam hota hai — kisi is pod host ke CUDA runtime masle ki
-    # wajah se HAMESHA ke liye latak gaya, koi exception nahi, koi timeout
-    # nahi (try/except sirf CONSTRUCTOR ko wrap karta tha, .transcribe() ko
-    # nahi). cpu_util ~2%, gpu_util 0% — genuinely stuck, kaam nahi ho raha
-    # tha. Ab seedha CPU par (int8) — dheema (~5-15 min zyada 65min video ke
-    # liye) lekin bharosemand, koi silent-hang ka khatra nahi. Wahi faisla
-    # jo render ke NVENC ke liye pehle kiya gaya tha isi shaam.
-    # faster-whisper/ctranslate2 defaults cpu_threads to 4 regardless of host
-    # size — on a 64-core pod that's 6.25% CPU and a 45min video crawls.
-    # Cap at 16: ctranslate2 CPU inference for a single audio stream has
-    # sharply diminishing returns past that, so grabbing all 64+ cores buys
-    # little extra speed while starving anything else running on the box.
-    whisper_threads = min(16, max(4, os.cpu_count() or 4))
-    print(f"Whisper ({WHISPER_MODEL}) se word timing nikaal raha hun (CPU, {whisper_threads} threads)...", flush=True)
-    from faster_whisper import WhisperModel
-    wmodel = WhisperModel(WHISPER_MODEL, device='cpu', compute_type='int8', cpu_threads=whisper_threads)
-    segments, info = wmodel.transcribe(str(out_mp3), word_timestamps=True, language='en')
+    # ---------- Forced alignment: word-level timing wapas nikalo ----------
+    # Whisper (speech recognition — guess karta kya bola gaya) ki jagah
+    # forced alignment (known text -> audio timing, koi guessing nahi) —
+    # dekho file ke top ka comment. Per-chunk chalate hain: audio pehle se
+    # hi Kokoro ke ~90-150-word blocks mein bana hua hai (chunks_dir), har
+    # chunk ki apni known text (blocks[i]) bhi maujood hai — koi 47min
+    # single-pass forward nahi karna, har chunk chhota aur tez hai, aur
+    # doosre pod-memory-blowup bugs (dekho upar ke comments) jaisi class ka
+    # risk khatam ho jata hai (ek hi model, main process mein sequential —
+    # koi Pool/N-copies-of-model nahi).
+    print("Forced alignment (torchaudio MMS_FA) se word timing nikaal raha hun...", flush=True)
+    import torch
+    import torchaudio as ta
+    from torchaudio.pipelines import MMS_FA as ALIGN_BUNDLE
+    torch.set_num_threads(max(1, min(16, os.cpu_count() or 4)))
+    align_model = ALIGN_BUNDLE.get_model().to('cpu')
+    align_model.eval()
+    align_tokenizer = ALIGN_BUNDLE.get_tokenizer()
+    align_aligner = ALIGN_BUNDLE.get_aligner()
+
+    def clean_for_align(token):
+        c = re.sub(r"[’‘]", "'", token)
+        c = re.sub(r"[^a-zA-Z']", '', c).lower()
+        return c
+
+    # ---- chunk durations + cumulative offsets pehle hi nikaal lo (sequential
+    # order mein — chunk i ka offset sirf chunk 0..i-1 ki durations ka sum) ----
+    import soundfile as sf
+    chunk_durs = []
+    for p in paths:
+        sf_info = sf.info(str(p))
+        chunk_durs.append(sf_info.frames / sf_info.samplerate)
+    offsets = [0.0]
+    for d in chunk_durs[:-1]:
+        offsets.append(offsets[-1] + d)
 
     words, cues = [], []
-    for seg in segments:
-        cue_words = []
-        for w in (seg.words or []):
-            wt = (w.word or '').strip()
-            if not wt:
-                continue
-            words.append({'word': wt, 'start': round(w.start, 3), 'end': round(w.end, 3)})
-            cue_words.append(wt)
-        if cue_words:
-            cues.append({'start': seg.start, 'end': seg.end, 'text': ' '.join(cue_words)})
+    for i, (block, wav_path, offset) in enumerate(zip(blocks, paths, offsets)):
+        orig_tokens = block.split()
+        align_tokens, display_tokens = [], []
+        for t in orig_tokens:
+            c = clean_for_align(t)
+            if c:
+                align_tokens.append(c)
+                display_tokens.append(t)
+        if not align_tokens:
+            continue
+        waveform, sr = ta.load(str(wav_path))
+        if sr != ALIGN_BUNDLE.sample_rate:
+            waveform = ta.functional.resample(waveform, sr, ALIGN_BUNDLE.sample_rate)
+        if waveform.shape[0] > 1:
+            waveform = waveform.mean(dim=0, keepdim=True)
+        try:
+            with torch.inference_mode():
+                emission, _ = align_model(waveform)
+                tokens = align_tokenizer(align_tokens)
+                token_spans = align_aligner(emission[0], tokens)
+            ratio = waveform.shape[1] / emission.shape[1] / ALIGN_BUNDLE.sample_rate
+            chunk_words = []
+            for disp, spans in zip(display_tokens, token_spans):
+                start = spans[0].start * ratio + offset
+                end = spans[-1].end * ratio + offset
+                chunk_words.append({'word': disp, 'start': round(start, 3), 'end': round(end, 3)})
+        except Exception as e:
+            # ek chunk ki alignment fail ho — poori 47min run ko na girao,
+            # is chunk ke words ko chunk ki known duration par evenly
+            # bant do (crude fallback, sirf yahi ek chunk ke liye).
+            print(f"  [warn] chunk {i + 1} alignment fail ({e}) — evenly-spaced fallback", flush=True)
+            step = chunk_durs[i] / max(1, len(display_tokens))
+            chunk_words = [{'word': disp, 'start': round(offset + j * step, 3), 'end': round(offset + (j + 1) * step, 3)}
+                           for j, disp in enumerate(display_tokens)]
+
+        words.extend(chunk_words)
+
+        # ---- cues: sentence-boundary par split (. ! ?), taake timeline
+        # stage ke slot-pacing target (~2.5-6s) ke liye kaafi chhote rahen ----
+        buf = []
+        for w in chunk_words:
+            buf.append(w)
+            if w['word'].rstrip('"\')’”').endswith(('.', '!', '?')) or w is chunk_words[-1]:
+                cues.append({'start': buf[0]['start'], 'end': buf[-1]['end'], 'text': ' '.join(x['word'] for x in buf)})
+                buf = []
+        print(f"  [{i + 1}/{len(blocks)}] chunk {i + 1} aligned", flush=True)
 
     (vdir / 'words.json').write_text(json.dumps(words, ensure_ascii=False), encoding='utf-8')
 
