@@ -201,19 +201,19 @@ def main():
     print(f"voiceover.mp3 - {dur:.1f}s ({dur / 60:.2f} min)", flush=True)
 
     # ---------- Whisper: word-level timing wapas nikalo ----------
-    # Kokoro ka Pool ab band ho chuka hai (koi aur fork nahi hoga is process
-    # mein) — is liye CUDA yahan wapas khol sakte hain, GPU-speed Whisper ke
-    # liye. Fork-crash ka khatra sirf Kokoro workers ke saath tha.
-    os.environ.pop('CUDA_VISIBLE_DEVICES', None)
-    print(f"Whisper ({WHISPER_MODEL}) se word timing nikaal raha hun (GPU koshish)...", flush=True)
+    # ASLI BUG (2026-08-19): device='cuda' ka WhisperModel() CONSTRUCTOR
+    # kamyaab ho jata tha ("Whisper GPU par chal raha hai" print bhi ho
+    # jata), lekin uske FAURAN baad wala .transcribe() call — jahan asli
+    # cuDNN/cuBLAS kaam hota hai — kisi is pod host ke CUDA runtime masle ki
+    # wajah se HAMESHA ke liye latak gaya, koi exception nahi, koi timeout
+    # nahi (try/except sirf CONSTRUCTOR ko wrap karta tha, .transcribe() ko
+    # nahi). cpu_util ~2%, gpu_util 0% — genuinely stuck, kaam nahi ho raha
+    # tha. Ab seedha CPU par (int8) — dheema (~5-15 min zyada 65min video ke
+    # liye) lekin bharosemand, koi silent-hang ka khatra nahi. Wahi faisla
+    # jo render ke NVENC ke liye pehle kiya gaya tha isi shaam.
+    print(f"Whisper ({WHISPER_MODEL}) se word timing nikaal raha hun (CPU)...", flush=True)
     from faster_whisper import WhisperModel
-
-    try:
-        wmodel = WhisperModel(WHISPER_MODEL, device='cuda', compute_type='float16')
-        print("Whisper GPU par chal raha hai", flush=True)
-    except Exception as e:
-        print(f"Whisper GPU fail ({e}) — CPU par jaa raha hun", flush=True)
-        wmodel = WhisperModel(WHISPER_MODEL, device='cpu', compute_type='int8')
+    wmodel = WhisperModel(WHISPER_MODEL, device='cpu', compute_type='int8')
     segments, info = wmodel.transcribe(str(out_mp3), word_timestamps=True, language='en')
 
     words, cues = [], []
