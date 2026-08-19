@@ -94,19 +94,27 @@ const ENV_RENDER_CONC = +(process.env.RENDER_CONC || 0);
 const execFileP = promisify(execFile);
 const ff = (args, to = 900000) => execFileP('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', ...args], { timeout: to, maxBuffer: 1 << 26 });
 
-// Is machine mein Intel Quick Sync (iGPU hardware encoder) hai — CPU x264 se
-// tez, aur AHEM: CPU cores khaali chhod deta hai jo isi waqt parallel clip-
-// building/Whisper jaisi cheezon ke kaam aate hain. Ek dafa test karte hain,
-// warna CPU (libx264) par wapas — dono taraf render chalti rahe.
-function detectQSV() {
-  try {
-    execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=black:s=64x64:d=0.2',
-      '-c:v', 'h264_qsv', '-f', 'null', '-'], { timeout: 15000 });
-    return true;
-  } catch { return false; }
-}
-let _qsv = null;
-function useQSV() { if (_qsv === null) _qsv = detectQSV(); return _qsv; }
+// QSV DISABLED (2026-08-20): same failure class as NVENC below — the 64x64
+// null-output probe passed on a rented AMD EPYC host (h264_qsv registered in
+// this ffmpeg build), but the REAL per-slot clip encode failed live with
+// "Error initializing an internal MFX session: unsupported (-3)" — no real
+// Intel Quick Sync silicon on that host, the probe just checks the encoder
+// is compiled in, not that working hardware backs it. Since rented pods can
+// land on Intel or AMD hosts unpredictably, and videoEnc() has no per-call
+// fallback if the probed encoder fails at actual encode time (same gap
+// documented for NVENC), a false-positive here hangs the whole render
+// (128 concurrent clip encodes all failing identically). Disabled entirely
+// — libx264 (CPU) is already proven reliable via the segmented-render fix
+// (65.96% CPU, ~14min render on a real run). function kept for reference.
+// function detectQSV() {
+//   try {
+//     execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=black:s=64x64:d=0.2',
+//       '-c:v', 'h264_qsv', '-f', 'null', '-'], { timeout: 15000 });
+//     return true;
+//   } catch { return false; }
+// }
+// let _qsv = null;
+function useQSV() { return false; }
 
 // NVENC DISABLED (2026-08-17): probe (64x64 test clip) reported NVENC
 // usable on a real pod, but the REAL merge encode (full 1920x1080 filter
