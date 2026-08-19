@@ -211,9 +211,15 @@ def main():
     # tha. Ab seedha CPU par (int8) — dheema (~5-15 min zyada 65min video ke
     # liye) lekin bharosemand, koi silent-hang ka khatra nahi. Wahi faisla
     # jo render ke NVENC ke liye pehle kiya gaya tha isi shaam.
-    print(f"Whisper ({WHISPER_MODEL}) se word timing nikaal raha hun (CPU)...", flush=True)
+    # faster-whisper/ctranslate2 defaults cpu_threads to 4 regardless of host
+    # size — on a 64-core pod that's 6.25% CPU and a 45min video crawls.
+    # Cap at 16: ctranslate2 CPU inference for a single audio stream has
+    # sharply diminishing returns past that, so grabbing all 64+ cores buys
+    # little extra speed while starving anything else running on the box.
+    whisper_threads = min(16, max(4, os.cpu_count() or 4))
+    print(f"Whisper ({WHISPER_MODEL}) se word timing nikaal raha hun (CPU, {whisper_threads} threads)...", flush=True)
     from faster_whisper import WhisperModel
-    wmodel = WhisperModel(WHISPER_MODEL, device='cpu', compute_type='int8')
+    wmodel = WhisperModel(WHISPER_MODEL, device='cpu', compute_type='int8', cpu_threads=whisper_threads)
     segments, info = wmodel.transcribe(str(out_mp3), word_timestamps=True, language='en')
 
     words, cues = [], []
