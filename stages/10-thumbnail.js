@@ -61,9 +61,31 @@ module.exports = async function (spec, cfg, st) {
   // King), warm cinematic lighting (torches/candlelight ya winter blue-silver
   // contrast), MINIMAL/NO text — jaisa is niche ke sab competitor channels
   // karte hain (title khud hook ka kaam karta hai, thumbnail par text nahi).
+  // 2026-08-19 user faisla: thumbnail TITLE ke hisaab se banna chahiye —
+  // agar title.txt pehle se likha ja chuka hai (main naam/twist decide ho
+  // chuka hai), to wahi is prompt ka ASAL source hai, sirf script ka
+  // opening nahi. Title na ho to purana script-based fallback chalta hai.
   const script = fs.readFileSync(U.p(spec.id, 'script.txt'), 'utf8');
-  const subject = await AI.chat(cfg.models.prompts,
-`Ek werewolf/Alpha-King paranormal romance audiobook ka thumbnail banana hai.
+  const titleFile = U.p(spec.id, 'title.txt');
+  const title = fs.existsSync(titleFile) ? fs.readFileSync(titleFile, 'utf8').trim() : '';
+
+  const subjectPrompt = title
+    ? `Ek werewolf/Alpha-King paranormal romance audiobook ka thumbnail banana hai.
+Video ka TITLE ye hai (ye is video ka ASAL hook/twist hai — thumbnail isi
+title ke SPECIFIC lamhe/scene ko dikhaye, koi generic scene nahi):
+
+"${title}"
+
+Neeche kahani ka context bhi hai. Sirf 10-16 lafz mein batao ke thumbnail
+mein KAUN sa kirdaar/scene dikhna chahiye — TITLE mein jo specific twist ya
+lamha bataya gaya hai wahi (heroine, Alpha King, ya dono ek sath). Ek theek
+theek tasveer do (jaise "a handsome, cold Alpha King with ice-pale eyes
+looming over a beautiful, kneeling maid in a torch-lit stone hall").
+**Alpha King/hero ke liye lafz "handsome" aur heroine ke liye lafz
+"beautiful" zaroor shamil karo.** Koi text nahi, koi tashreeh nahi — bas scene.
+
+${script.slice(0, 1200)}`
+    : `Ek werewolf/Alpha-King paranormal romance audiobook ka thumbnail banana hai.
 Neeche kahani ka shuru hai. Sirf 10-16 lafz mein batao ke thumbnail mein
 KAUN sa kirdaar/scene dikhna chahiye — is kahani ke sab se dramatic lamhe se
 (heroine, Alpha King, ya dono ek sath). Ek theek theek tasveer do
@@ -72,7 +94,10 @@ beautiful, kneeling maid in a torch-lit stone hall"). **Alpha King/hero ke
 liye lafz "handsome" aur heroine ke liye lafz "beautiful" zaroor shamil
 karo.** Koi text nahi, koi tashreeh nahi — bas scene.
 
-${script.slice(0, 1200)}`, { maxTokens: 140, temperature: 0.75 }).catch(() => 'a handsome, cold Alpha King looming over a beautiful, low-status heroine in a torch-lit palace hall');
+${script.slice(0, 1200)}`;
+
+  const subject = await AI.chat(cfg.models.prompts, subjectPrompt, { maxTokens: 160, temperature: 0.75 })
+    .catch(() => 'a handsome, cold Alpha King looming over a beautiful, low-status heroine in a torch-lit palace hall');
 
   // 2026-08-19 user faisla: characters HAMESHA bright, clearly-lit chehron ke
   // sath aur 4K/ultra-sharp detail mein hon — atmospheric shadows background/
