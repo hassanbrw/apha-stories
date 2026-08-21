@@ -63,6 +63,42 @@ async function findOffer({ gpuName, minCpuCores = 40, minReliability = 0.95, max
   return offers[0]; // sabse sasta jo shart poori kare
 }
 
+// Render/voice ab dono PURI TARAH CPU-bound hain (NVENC/QSV disabled — dekho
+// stages/9-render.js — aur Whisper ki jagah CPU forced-alignment hai) — is
+// liye GPU MODEL ab render-speed ke liye IRRELEVANT hai, sirf core count aur
+// price matter karte hain. Isse pehle har baar manually ek GPU try karte thay
+// (RTX 5090 -> koi offer nahi -> RTX 4090 -> ...), jo dhundhne mein waqt zaya
+// karta tha aur kabhi bhi sabse sasta/tez combo nahi hota tha. Ab saare GPU
+// tiers ek sath scan karte hain aur "sweet spot" range (90-200 cores) mein
+// sabse sasta uthate hain.
+//
+// Sweet-spot upper bound 200 cores kyun: stages/9-render.js mein segCount =
+// min(32, cores/4) — 128 cores par hi 32 (max) tak pahunch jata hai — aur
+// segThreads = min(6, cores/segCount) — segThreads apni max (6) tak sirf
+// 192+ cores par pahunchta hai. Inse zyada cores kiraye pe lena sirf paisa
+// zaya karta hai, render further tez nahi hoti (dono formulas already cap
+// ho chuke hain).
+const CPU_HEAVY_GPU_CANDIDATES = [
+  'RTX 3090', 'RTX 4090', 'RTX A5000', 'RTX 4080', 'RTX 4080 SUPER',
+  'RTX 5090', 'A40', 'RTX A6000', 'RTX A4000', 'L40', 'L40S',
+];
+const SWEET_SPOT_MIN = 90, SWEET_SPOT_MAX = 200;
+
+async function findBestCoreOffer({ minCpuCores = 40, minReliability = 0.95, excludeDeverified = true } = {}) {
+  const results = await Promise.all(CPU_HEAVY_GPU_CANDIDATES.map(async gpuName => {
+    try { return { gpuName, offer: await findOffer({ gpuName, minCpuCores, minReliability, excludeDeverified }) }; }
+    catch { return null; }
+  }));
+  const found = results.filter(Boolean);
+  if (!found.length) throw new Error(`koi bhi GPU tier mein offer nahi mila (${minCpuCores}+ cores, ${minReliability * 100}%+ reliable, ${CPU_HEAVY_GPU_CANDIDATES.length} tiers try kiye)`);
+
+  const cores = r => r.offer.cpu_cores_effective || r.offer.cpu_cores || 0;
+  const inSweetSpot = found.filter(r => cores(r) >= SWEET_SPOT_MIN && cores(r) <= SWEET_SPOT_MAX);
+  const pool = inSweetSpot.length ? inSweetSpot : found;   // koi sweet-spot mein na ho to jo mila usi mein se behtareen
+  pool.sort((a, b) => a.offer.dph_total - b.offer.dph_total);
+  return pool[0];
+}
+
 // env: plain object {KEY: "value"} — Vast.ai khud "-e KEY=value" format maangta hai
 function envToDockerFlags(env) {
   return Object.entries(env).map(([k, v]) => `-e ${k}=${JSON.stringify(String(v))}`).join(' ');
@@ -105,4 +141,4 @@ async function waitUntilExited(id, { intervalMs = 20000, timeoutMs = 90 * 60 * 1
   throw new Error(`instance ${id} ${timeoutMs / 60000} min mein khatam nahi hua — khud check karo`);
 }
 
-module.exports = { findOffer, createInstance, getInstance, destroyInstance, waitUntilExited };
+module.exports = { findOffer, findBestCoreOffer, createInstance, getInstance, destroyInstance, waitUntilExited };

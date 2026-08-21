@@ -102,12 +102,28 @@ const arg = (name, def = null) => {
   let instanceId, waitFn, destroyFn;
 
   if (provider === 'vast') {
-    const gpuName = arg('gpu', 'RTX 5090');
-    const minCores = +arg('min-cores', 40);
+    // Render aur voice ab dono CPU-bound hain (NVENC/QSV disabled, Whisper
+    // ki jagah CPU forced-alignment) — GPU model render-speed ke liye
+    // irrelevant hai. --gpu explicitly diya jaye tabhi ek fixed GPU tier
+    // par search hoti hai (jaise pehle), warna khud-ba-khud saare GPU tiers
+    // scan kar ke 90-200 core "sweet spot" mein sabse sasta offer uthate
+    // hain (dekho pod/vast.js ka findBestCoreOffer — is range se zyada
+    // cores render ko further tez nahi karte, segCount/segThreads dono cap
+    // ho jate hain).
+    const explicitGpu = arg('gpu');
+    const minCores = +arg('min-cores', 90);
     const minReliability = +arg('min-reliability', 0.95);
-    U.log(`\n== Vast.ai par best offer dhoond raha hun (${gpuName}, ${minCores}+ cores, ${Math.round(minReliability * 100)}%+ reliable) ==`);
-    const offer = await Vast.findOffer({ gpuName, minCpuCores: minCores, minReliability });
-    U.ok(`offer mila — id ${offer.id}, $${offer.dph_total}/hr, ${offer.cpu_cores_effective || offer.cpu_cores} cores, ${Math.round(offer.reliability2 * 1000) / 10}% reliable`);
+    let offer, gpuLabel;
+    if (explicitGpu) {
+      U.log(`\n== Vast.ai par best offer dhoond raha hun (${explicitGpu}, ${minCores}+ cores, ${Math.round(minReliability * 100)}%+ reliable) ==`);
+      offer = await Vast.findOffer({ gpuName: explicitGpu, minCpuCores: minCores, minReliability });
+      gpuLabel = explicitGpu;
+    } else {
+      U.log(`\n== Vast.ai par sasta+tez offer dhoond raha hun (kisi bhi GPU tier, ${minCores}+ cores, ${Math.round(minReliability * 100)}%+ reliable) ==`);
+      const best = await Vast.findBestCoreOffer({ minCpuCores: minCores, minReliability });
+      offer = best.offer; gpuLabel = best.gpuName;
+    }
+    U.ok(`offer mila — ${gpuLabel}, id ${offer.id}, $${offer.dph_total}/hr, ${offer.cpu_cores_effective || offer.cpu_cores} cores, ${Math.round(offer.reliability2 * 1000) / 10}% reliable`);
     const inst = await Vast.createInstance({ offerId: offer.id, image: imageName, env: envVars });
     instanceId = inst.new_contract || inst.id;
     U.ok(`instance chalu — id: ${instanceId}`);
