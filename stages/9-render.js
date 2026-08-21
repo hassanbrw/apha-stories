@@ -35,14 +35,29 @@ function escapeFilterPath(p) {
 // is liye naive split(',') Text ko tor deta — 9th comma tak hi manually
 // split karte hain, baaki sab Text hai.
 function assTimeToSec(t) {
-  const m = t.match(/^(\d+):(\d{2}):(\d{2})\.(\d{2})$/);
-  if (!m) return 0;
-  return (+m[1]) * 3600 + (+m[2]) * 60 + (+m[3]) + (+m[4]) / 100;
+  // ASLI BUG (2026-08-20): pehle regex \.(\d{2})$ tha jo SIRF exactly 2-digit
+  // centiseconds match karta tha — ek malformed "0:00:41.100" (upstream
+  // rounding bug se) match hi nahi hoti thi aur ye chup-chaap 0 return kar
+  // deta tha, jis se wo caption line HAR segment mein 0..segLen tak leak ho
+  // kar poore frame par stack ho jati thi. Upstream toAssTime/secToAssTime
+  // ab carry sahi karte hain (cs kabhi 100 nahi), lekin parser ko bhi
+  // tolerant rakhte hain: 1+ fractional digits qubool karo, throw karo agar
+  // bilkul match na ho (silent 0 se behtar — future regression foran pakdi
+  // jaye).
+  const m = t.match(/^(\d+):(\d{2}):(\d{2})\.(\d+)$/);
+  if (!m) throw new Error(`malformed ASS timestamp: "${t}"`);
+  return (+m[1]) * 3600 + (+m[2]) * 60 + (+m[3]) + parseFloat('0.' + m[4]);
 }
 function secToAssTime(sec) {
-  sec = Math.max(0, sec);
-  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = Math.floor(sec % 60);
-  const cs = Math.round((sec - Math.floor(sec)) * 100);
+  // dekho lib/ass-captions.js ka toAssTime — wahi carry-safe logic (cs=100
+  // ka bug yahan bhi tha, dono jagah fix zaroori hai).
+  const totalCs = Math.round(Math.max(0, sec) * 100);
+  const cs = totalCs % 100;
+  const totalSec = (totalCs - cs) / 100;
+  const s = totalSec % 60;
+  const totalMin = (totalSec - s) / 60;
+  const m = totalMin % 60;
+  const h = (totalMin - m) / 60;
   return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(cs).padStart(2, '0')}`;
 }
 // Poori .ass ko [segStart,segEnd) time-window ke liye chhota, REBASED
