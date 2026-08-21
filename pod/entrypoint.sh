@@ -71,7 +71,14 @@ if [ "${RENDER_ONLY:-0}" = "1" ]; then
   PODCORES=$(nproc)
   export RENDER_CONC=$(( PODCORES < 128 ? PODCORES : 128 ))
   echo "   RENDER_CONC=${RENDER_CONC} (pod cores: ${PODCORES})"
-  node run.js --video="${VIDEO_ID}" --only=render
+  # ASLI BUG (2026-08-21): --redo ke bagair, agar Vast.ai isi container ko
+  # apne auto-restart-on-clean-exit quirk se dobara chala de (SAME container,
+  # SAME local state.json us container ki apni pehli successful pass se),
+  # to run.js render ko "pehle ho chuka" maan kar SKIP kar deta — sirf purana
+  # final.mp4 dobara upload karta rehta, restart-loop mein 0% CPU par paisa
+  # jalta rehta (39 min real case). RENDER_ONLY mode ka poora maqsad hi
+  # render dobara karna hai — --redo yahan hamesha lazmi hai.
+  node run.js --video="${VIDEO_ID}" --only=render --redo
   echo "== R2 par final.mp4 + captions/ upload ho raha hai =="
   $RCLONE copy "$WORKDIR/final.mp4" "r2:${R2_BUCKET}/${VIDEO_ID}/"
   $RCLONE copy "$WORKDIR/captions/" "r2:${R2_BUCKET}/${VIDEO_ID}/captions/" || true
@@ -132,7 +139,9 @@ cd /app
 PODCORES=$(nproc)
 export RENDER_CONC=$(( PODCORES < 128 ? PODCORES : 128 ))
 echo "   RENDER_CONC=${RENDER_CONC} (pod cores: ${PODCORES})"
-node run.js --video="${VIDEO_ID}" --only=render
+# --redo zaroori hai (dekho RENDER_ONLY branch ka comment upar) — --only=render
+# se scoped hai is liye sirf render dobara hoti hai, voice/script wagera nahi.
+node run.js --video="${VIDEO_ID}" --only=render --redo
 
 echo "== R2 par final.mp4 + voice/ + captions/ upload ho raha hai =="
 $RCLONE copy "$WORKDIR/final.mp4" "r2:${R2_BUCKET}/${VIDEO_ID}/"

@@ -47,7 +47,7 @@ async function req(method, pathSuffix, body) {
 // "deverified" ka matlab Vast khud ne is host ko failed-verification maara
 // hai (hardware/uptime issue). Ab default mein explicitly bahar rakha,
 // warna sabse sasta offer almost hamesha yehi nikalta hai.
-async function findOffer({ gpuName, minCpuCores = 40, minReliability = 0.95, maxGpuCount = 1, excludeDeverified = true }) {
+async function findOffer({ gpuName, minCpuCores = 40, minReliability = 0.95, maxGpuCount = 1, excludeDeverified = true, minDiskGB = 20 }) {
   const res = await req('POST', '/bundles', {
     gpu_name: { eq: gpuName },
     num_gpus: { lte: maxGpuCount },
@@ -59,7 +59,12 @@ async function findOffer({ gpuName, minCpuCores = 40, minReliability = 0.95, max
   });
   let offers = (res.offers || []).filter(o => (o.cpu_cores_effective || o.cpu_cores || 0) >= minCpuCores);
   if (excludeDeverified) offers = offers.filter(o => o.verification !== 'deverified');
-  if (!offers.length) throw new Error(`koi offer nahi mila (${gpuName}, ${minCpuCores}+ cores, ${minReliability * 100}%+ reliable${excludeDeverified ? ', deverified hosts excluded' : ''})`);
+  // disk_space = host par max available disk — 157 images + voice chunks +
+  // final.mp4 + intermediates (~2-3GB is typical for a ~50min video) ke
+  // liye 20GB kaafi generous floor hai, host thin-disk hosts ko bahar rakhta
+  // hai jahan render beech mein "no space left" se crash ho sakti hai.
+  offers = offers.filter(o => (o.disk_space || 0) >= minDiskGB);
+  if (!offers.length) throw new Error(`koi offer nahi mila (${gpuName}, ${minCpuCores}+ cores, ${minReliability * 100}%+ reliable, ${minDiskGB}GB+ disk${excludeDeverified ? ', deverified hosts excluded' : ''})`);
   return offers[0]; // sabse sasta jo shart poori kare
 }
 
