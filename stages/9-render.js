@@ -530,13 +530,24 @@ module.exports = async function (spec, cfg, st) {
       }
     }
 
-    // segment count: cores/4 (isolated test se ~4 threads/process ke baad
-    // returns flat ho jate hain), 1-32 ke beech clamp (chhoti machine par
-    // bhi kaam kare, bohot bare host par bhi sensible tadaad rahe).
+    // ASLI FIX (2026-08-22): pehle segCount 32 par HARDCODED cap tha — bare
+    // hosts (256 cores) par sirf 32*6=192 threads assign hote (~75% dikhta),
+    // lekin isolated test (2026-08-17) ne confirm kiya tha ke ye filter
+    // chain (particles overlay + ass captions) EK process mein ~4 threads
+    // se aagay kaam nahi badhata (libass/overlay parallelize nahi hotay) —
+    // is liye asal mein sirf ~32*4=128 threads kaam kar rahe thay, baaki
+    // cores khaali (observed cpu_util 27-38% on 256-core hosts, expected).
+    // Fix: segThreads ko empirical ceiling (4) par capped rakho, lekin
+    // segCount ko is hisaab se KHUD-BA-KHUD nikalo taake JITNE bhi cores
+    // milen (chhota pod ho ya bara), poore use hon — koi fixed segCount cap
+    // nahi. Chhotay pod par khud hi kam segments/threads ban jate hain
+    // (cores se zyada kabhi nahi maangte), bare pod par zyada parallel
+    // segments ban jate hain — dono taraf khud adjust.
     const fps = cfg.canvas.fps;
     const cores = os.cpus().length || 1;
-    const segCount = Math.max(1, Math.min(32, Math.floor(cores / 4)));
-    const segThreads = Math.max(1, Math.min(6, Math.floor(cores / segCount)));
+    const IDEAL_THREADS_PER_SEG = 4;
+    const segThreads = Math.max(1, Math.min(IDEAL_THREADS_PER_SEG, cores));
+    const segCount = Math.max(1, Math.floor(cores / segThreads));
     const segLen = real / segCount;
     U.log(`   particles + captions — ${segCount} parallel segments (${segThreads} thread/segment, ${cores} cores)...`);
 

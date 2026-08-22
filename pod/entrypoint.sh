@@ -69,7 +69,12 @@ if [ "${RENDER_ONLY:-0}" = "1" ]; then
   echo "== RENDER (ffmpeg clips + overlay + mux) =="
   cd /app
   PODCORES=$(nproc)
-  export RENDER_CONC=$(( PODCORES < 128 ? PODCORES : 128 ))
+  # ASLI FIX (2026-08-22): 128 ka fixed cap tha — clip-build ek clip = ek
+  # thread hai (koi per-process diminishing-returns issue nahi, segmented
+  # particles+captions step jaisa), is liye jitne bhi cores milen sab use
+  # karne chahiye, koi arbitrary ceiling nahi. 256-core host par pehle sirf
+  # 128 clips ek sath bantay thay, aadhe cores khaali rehte.
+  export RENDER_CONC=$PODCORES
   echo "   RENDER_CONC=${RENDER_CONC} (pod cores: ${PODCORES})"
   # ASLI BUG (2026-08-21): --redo ke bagair, agar Vast.ai isi container ko
   # apne auto-restart-on-clean-exit quirk se dobara chala de (SAME container,

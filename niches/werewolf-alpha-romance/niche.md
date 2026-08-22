@@ -282,6 +282,10 @@ have to supply one. Before starting any new video:
 - 2026-08-17 — an elderly healer is de-aged into a stranger by a botched spell; the Alpha King she once saved as a boy searches for his old healer, never suspecting she's the young woman now treating him — work/deaged-healer-forgotten-debt/
 - 2026-08-18 — a servant girl has secretly signed the illiterate Alpha King's personal letters in his name for three years; no one, including his own council, knows he never learned to read — work/illiterate-king-secret-letters/
 - 2026-08-18 — every bride the Alpha King has taken has died within a week of the mating bond; the seventh, a laundress with nothing left to lose, survives, and no one can explain why — work/seventh-bride-survives/
+- 2026-08-19 — the Alpha King is cursed to appear as an ordinary woodcutter to everyone except the one person fated to see him clearly — a firewood-seller who's been scolding him for slow deliveries for a month — work/woodcutter-king-curse/
+- 2026-08-19 — a widowed healer spends every full moon calming the Alpha King's war-wolf as it howls itself raw in a locked cellar; she's the only one who's ever seen what he becomes, and the only one who isn't afraid of it — work/widowed-healer-wolf-side/
+- 2026-08-21 — sold at a mating auction for a single copper coin as a joke, she turns out to be the last surviving heir of a rival pack the Alpha King has been trying to find for years — work/copper-coin-hidden-heir/
+- 2026-08-21 — a servant girl leaves a bowl of stew outside the imprisoned Alpha King's cell every night for a year, never once speaking to him; the night he's finally freed, he asks the guards for her name before his own crown — work/stew-for-the-imprisoned-king/
 
 ## 50 topic ideas
 

@@ -8,6 +8,7 @@ tools/gemini/downloads/
 tools/gemini/prompts/*.txt
 tools/gemini/state-*.json
 tools/gemini/reference/
+tools/upscale/
 avatars/
 *.log
 assets/
